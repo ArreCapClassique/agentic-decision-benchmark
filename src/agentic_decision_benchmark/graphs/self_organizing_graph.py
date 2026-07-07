@@ -23,7 +23,12 @@ from agentic_decision_benchmark.schemas import (
     Round4ScorecardOutput,
     Scorecard,
 )
-from agentic_decision_benchmark.settings import BenchmarkSettings
+from agentic_decision_benchmark.settings import (
+    BenchmarkSettings,
+    format_role_private_brief,
+    get_private_brief_for_role,
+    load_private_role_briefs,
+)
 from agentic_decision_benchmark.state import BenchmarkState
 
 
@@ -107,12 +112,22 @@ def _scorecard_blackboard_item(agent_name: str, scorecard: Scorecard) -> Blackbo
 
 def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettings):
     agents = load_agents()
+    private_briefs = load_private_role_briefs()
+
+    def private_brief_for_agent(agent_domain: str) -> str:
+        role_brief = get_private_brief_for_role(private_briefs, agent_domain)
+        return format_role_private_brief(agent_domain, role_brief)
 
     def round_1_independent_analysis(state: dict[str, Any]) -> dict[str, Any]:
         outputs = []
         blackboard_items: list[BlackboardItem] = []
         for agent in agents:
-            prompt = build_self_round1_prompt(agent.definition, state["scenario"], state["candidate_strategies"])
+            prompt = build_self_round1_prompt(
+                agent.definition,
+                state["scenario"],
+                state["candidate_strategies"],
+                private_brief_for_agent(agent.domain),
+            )
             analysis = provider_json(
                 provider,
                 prompt,
@@ -143,6 +158,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                 agent.definition,
                 state["scenario"],
                 state["candidate_strategies"],
+                private_brief_for_agent(agent.domain),
                 state.get("blackboard", []),
             )
             critique_output = provider_json(
@@ -189,6 +205,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                 agent.definition,
                 state["scenario"],
                 state["candidate_strategies"],
+                private_brief_for_agent(agent.domain),
                 state.get("blackboard", []),
             )
             update = provider_json(
@@ -220,6 +237,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                 agent.definition,
                 state["scenario"],
                 state["candidate_strategies"],
+                private_brief_for_agent(agent.domain),
                 state.get("blackboard", []),
             )
             card_output = provider_json(

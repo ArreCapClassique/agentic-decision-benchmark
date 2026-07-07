@@ -10,6 +10,7 @@ class BenchmarkState(TypedDict):
     mode: ModeName
     scenario: str
     candidate_strategies: dict[str, Any]
+    metadata: dict[str, Any]
     round_id: int
     blackboard: Annotated[list[BlackboardItem], operator.add]
     agent_outputs: Annotated[list[AgentOutput], operator.add]
@@ -40,6 +41,10 @@ def create_initial_state(
         "mode": validate_mode(mode),
         "scenario": scenario,
         "candidate_strategies": candidate_strategies,
+        "metadata": {
+            "information_setting": "equal_total",
+            "private_role_briefs_enabled": True,
+        },
         "round_id": 0,
         "blackboard": [],
         "agent_outputs": [],

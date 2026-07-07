@@ -9,7 +9,7 @@ from agentic_decision_benchmark.utils.json_utils import to_jsonable
 
 STRICT_JSON_RULES = (
     "Output valid JSON only. Do not include Markdown. Do not include explanations outside JSON. "
-    "Stay within the assigned role. Use only the provided scenario, candidate strategies, and visible blackboard data. "
+    "Stay within the assigned role. Use only the provided scenario, candidate strategies, private brief or consolidated private pack when present, and visible blackboard data. "
     "Calibrate confidence between 0 and 1. Avoid inventing facts not present in the scenario."
 )
 
@@ -29,6 +29,7 @@ def build_generalist_prompt(
     scenario: str,
     candidate_strategies: dict[str, Any],
     *,
+    consolidated_private_brief_pack: str | None = None,
     faulty_claim: str | None = None,
 ) -> str:
     return "\n".join(
@@ -38,6 +39,9 @@ def build_generalist_prompt(
             "ROLE: Generalist strategy consultant.",
             "Return schema keys: recommended_strategy, recommendation, reasoning, risks, assumptions, confidence.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
+            "CONSOLIDATED PRIVATE ROLE-SPECIFIC INFORMATION PACK",
+            "The following synthetic information combines all role-specific private briefs. Use it as the full information pack available to the generalist baseline.",
+            consolidated_private_brief_pack or "None",
             f"FAULT_CONTEXT: {faulty_claim or 'None'}",
         ]
     )
@@ -60,6 +64,7 @@ def build_domain_analysis_prompt(
     scenario: str,
     candidate_strategies: dict[str, Any],
     *,
+    private_brief: str | None = None,
     faulty_claim: str | None = None,
 ) -> str:
     return "\n".join(
@@ -72,6 +77,12 @@ def build_domain_analysis_prompt(
             f"AGENT_PROFILE: {_payload(agent.model_dump())}",
             "Return schema keys: claims, risks, opportunities, assumptions, recommendation, confidence.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
+            "PRIVATE ROLE-SPECIFIC BRIEF",
+            "The following information is synthetic private case knowledge visible to your role only.",
+            "Use it as partial internal organizational knowledge.",
+            "Do not assume the supervisor or other agents know it unless you include it in your isolated output.",
+            "Preserve uncertainty and source labels where relevant.",
+            private_brief or "None",
             f"FAULT_CONTEXT: {faulty_claim or 'None'}",
         ]
     )
@@ -94,7 +105,24 @@ def build_supervisor_synthesis_prompt(
     )
 
 
-def build_self_round1_prompt(agent: AgentDefinition, scenario: str, candidate_strategies: dict[str, Any]) -> str:
+def _private_brief_section(private_brief: str | None) -> list[str]:
+    return [
+        "PRIVATE ROLE-SPECIFIC BRIEF",
+        "The following information is synthetic private case knowledge visible to your role only.",
+        "Use it as partial internal organizational knowledge.",
+        "You only know your own private brief directly.",
+        "You may learn other roles' private information only if they have posted it to the blackboard.",
+        "Preserve uncertainty and source labels where relevant.",
+        private_brief or "None",
+    ]
+
+
+def build_self_round1_prompt(
+    agent: AgentDefinition,
+    scenario: str,
+    candidate_strategies: dict[str, Any],
+    private_brief: str | None = None,
+) -> str:
     return "\n".join(
         [
             "TASK: SELF_ORGANIZING_ROUND_1",
@@ -105,6 +133,7 @@ def build_self_round1_prompt(agent: AgentDefinition, scenario: str, candidate_st
             f"AGENT_PROFILE: {_payload(agent.model_dump())}",
             "Return schema keys: claims, risks, opportunities, assumptions, questions_for_others, initial_recommendation, confidence.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
+            *_private_brief_section(private_brief),
         ]
     )
 
@@ -113,6 +142,7 @@ def build_self_round2_prompt(
     agent: AgentDefinition,
     scenario: str,
     candidate_strategies: dict[str, Any],
+    private_brief: str | None,
     blackboard: list[BlackboardItem],
 ) -> str:
     return "\n".join(
@@ -124,6 +154,7 @@ def build_self_round2_prompt(
             "PHASE: Round 2 cross-critique. Critique claims, risks, assumptions, or recommendations from other agents.",
             "Return schema key: critiques. Each critique needs target_agent, target_claim, critique, missing_assumption, risk_introduced, severity, confidence, related_strategy.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
+            *_private_brief_section(private_brief),
             f"VISIBLE_BLACKBOARD: {_payload({'blackboard': blackboard})}",
         ]
     )
@@ -133,6 +164,7 @@ def build_self_round3_prompt(
     agent: AgentDefinition,
     scenario: str,
     candidate_strategies: dict[str, Any],
+    private_brief: str | None,
     blackboard: list[BlackboardItem],
 ) -> str:
     return "\n".join(
@@ -144,6 +176,7 @@ def build_self_round3_prompt(
             "PHASE: Round 3 belief update. Read all previous blackboard items, critiques, and new information. Update your position without restarting from scratch.",
             "Return schema keys: updated_recommendation, changed_beliefs, accepted_critiques, rejected_critiques, remaining_concerns, confidence.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
+            *_private_brief_section(private_brief),
             f"VISIBLE_BLACKBOARD: {_payload({'blackboard': blackboard})}",
         ]
     )
@@ -153,6 +186,7 @@ def build_self_round4_prompt(
     agent: AgentDefinition,
     scenario: str,
     candidate_strategies: dict[str, Any],
+    private_brief: str | None,
     blackboard: list[BlackboardItem],
 ) -> str:
     return "\n".join(
@@ -165,6 +199,7 @@ def build_self_round4_prompt(
             "Scores must be integers from 1 to 5. Criteria: financial_viability, operational_feasibility, strategic_value, workforce_feasibility, legal_compliance_safety.",
             "Return schema keys: scores, confidence.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
+            *_private_brief_section(private_brief),
             f"VISIBLE_BLACKBOARD: {_payload({'blackboard': blackboard})}",
         ]
     )

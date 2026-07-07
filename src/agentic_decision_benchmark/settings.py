@@ -8,8 +8,30 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+from agentic_decision_benchmark.schemas import PrivateRoleBriefs, RolePrivateBrief
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ROLE_PRIVATE_BRIEF_KEYS: tuple[str, ...] = ("finance", "operations", "hr", "legal", "strategy", "technology")
+ROLE_SECTION_TITLES = {
+    "finance": "Finance",
+    "operations": "Operations",
+    "hr": "Human Resources",
+    "legal": "Legal / Compliance",
+    "strategy": "Strategy",
+    "technology": "Technology",
+}
+ROLE_ALIASES = {
+    "finance": "finance",
+    "operations": "operations",
+    "human resources": "hr",
+    "hr": "hr",
+    "legal compliance": "legal",
+    "legal": "legal",
+    "compliance": "legal",
+    "strategy": "strategy",
+    "technology": "technology",
+}
 
 
 class BenchmarkSettings(BaseModel):
@@ -34,6 +56,60 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 def load_text(path: Path) -> str:
     return path.read_text(encoding="utf-8").strip()
+
+
+def _normalize_role(role: str) -> str:
+    return " ".join(role.lower().replace("/", " ").replace("_", " ").split())
+
+
+def _resolve_private_brief_key(role: str) -> str:
+    normalized = _normalize_role(role)
+    try:
+        return ROLE_ALIASES[normalized]
+    except KeyError as exc:
+        raise ValueError(f"Unknown private brief role {role!r}. Expected one of {sorted(ROLE_ALIASES)}") from exc
+
+
+def load_private_role_briefs(path: str | Path = PROJECT_ROOT / "data" / "private_role_briefs.yaml") -> PrivateRoleBriefs:
+    return PrivateRoleBriefs.model_validate(load_yaml(Path(path)))
+
+
+def get_private_brief_for_role(briefs: PrivateRoleBriefs, role: str) -> RolePrivateBrief:
+    return getattr(briefs, _resolve_private_brief_key(role))
+
+
+def _format_private_brief_items(title: str, brief: RolePrivateBrief) -> str:
+    lines = [
+        f"[{title}]",
+        f"visibility: {brief.visibility}",
+        f"synthetic: {str(brief.synthetic).lower()}",
+    ]
+    for item in brief.brief_items:
+        lines.extend(
+            [
+                f"- {item.id} | {item.source_label} | certainty: {item.certainty} | synthetic: {str(item.synthetic).lower()}",
+                f"  {item.statement}",
+                f"  relevance: {', '.join(item.relevance)}",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def format_role_private_brief(role: str, brief: RolePrivateBrief) -> str:
+    role_key = _resolve_private_brief_key(role)
+    return _format_private_brief_items(ROLE_SECTION_TITLES[role_key], brief)
+
+
+def build_consolidated_private_brief_pack(briefs: PrivateRoleBriefs) -> str:
+    lines = [
+        "PRIVATE ROLE-SPECIFIC INFORMATION PACK",
+        "Synthetic case information used for benchmark purposes only.",
+        "",
+    ]
+    for role_key in ROLE_PRIVATE_BRIEF_KEYS:
+        lines.append(_format_private_brief_items(ROLE_SECTION_TITLES[role_key], getattr(briefs, role_key)))
+        lines.append("")
+    return "\n".join(lines).strip()
 
 
 def load_settings(

@@ -81,6 +81,25 @@ self_organizing/
 
 Each run writes JSON state, recommendations, metrics, evaluation artifacts, and a Markdown comparative report when possible.
 
+## Private Role-Specific Knowledge
+
+The benchmark uses synthetic private role-specific briefs because the EuroTech case is fictional but the challenge requires specialized agents with partial knowledge.
+
+The default information setting is `equal_total`.
+
+In `equal_total`:
+- `single` receives all private briefs as one consolidated information pack.
+- `supervisor` distributes private briefs by role to isolated domain agents.
+- `self_organizing` distributes private briefs by role, and agents share information only through the blackboard.
+
+This isolates the effect of coordination mechanism rather than giving one mode more total information than another.
+
+The private brief file is located at:
+
+```text
+data/private_role_briefs.yaml
+```
+
 ## Provider Migration
 
 Graph logic depends only on the `LLMProvider` interface:

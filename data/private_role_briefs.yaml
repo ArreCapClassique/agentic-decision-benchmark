@@ -1,0 +1,139 @@
+finance:
+  visibility: "finance_agent_only"
+  synthetic: true
+  brief_items:
+    - id: "FIN-001"
+      source_label: "Synthetic CFO memo"
+      synthetic: true
+      statement: "EuroTech can safely allocate approximately €22M–€28M in strategic investment over the next 18 months without breaching internal liquidity thresholds."
+      certainty: "medium"
+      relevance:
+        - "financial_viability"
+        - "investment_capacity"
+        - "cash_flow"
+
+    - id: "FIN-002"
+      source_label: "Synthetic finance planning note"
+      synthetic: true
+      statement: "Losing the automotive OEM would put roughly 30% of revenue at risk, but replacing it with wind revenue would likely require upfront spending before revenue materializes."
+      certainty: "high"
+      relevance:
+        - "revenue_exposure"
+        - "transition_risk"
+
+operations:
+  visibility: "operations_agent_only"
+  synthetic: true
+  brief_items:
+    - id: "OPS-001"
+      source_label: "Synthetic plant operations memo"
+      synthetic: true
+      statement: "Only two of EuroTech’s five production lines currently have sufficient sensor coverage for near-term predictive quality deployment."
+      certainty: "medium"
+      relevance:
+        - "operational_feasibility"
+        - "data_readiness"
+        - "ai_quality_deployment"
+
+    - id: "OPS-002"
+      source_label: "Synthetic production planning note"
+      synthetic: true
+      statement: "Full wind-component retooling could reduce available automotive production capacity for 4–6 months."
+      certainty: "medium"
+      relevance:
+        - "retooling_risk"
+        - "production_disruption"
+
+hr:
+  visibility: "hr_agent_only"
+  synthetic: true
+  brief_items:
+    - id: "HR-001"
+      source_label: "Synthetic HR capability assessment"
+      synthetic: true
+      statement: "EuroTech has a shortage of industrial data engineers and quality analytics specialists."
+      certainty: "high"
+      relevance:
+        - "workforce_feasibility"
+        - "hiring_risk"
+        - "ai_skills"
+
+    - id: "HR-002"
+      source_label: "Synthetic HR planning note"
+      synthetic: true
+      statement: "Hiring specialized AI quality and wind-sector engineering talent would likely take 6–9 months."
+      certainty: "medium"
+      relevance:
+        - "hiring_timeline"
+        - "implementation_risk"
+
+legal:
+  visibility: "legal_agent_only"
+  synthetic: true
+  brief_items:
+    - id: "LEG-001"
+      source_label: "Synthetic legal memo"
+      synthetic: true
+      statement: "The OEM requirement is not merely to deploy AI, but to demonstrate traceable and auditable predictive quality management."
+      certainty: "high"
+      relevance:
+        - "compliance"
+        - "auditability"
+        - "oem_requirement"
+
+    - id: "LEG-002"
+      source_label: "Synthetic contract risk note"
+      synthetic: true
+      statement: "A premature wind partnership commitment could expose EuroTech to penalties if retooling milestones are missed."
+      certainty: "medium"
+      relevance:
+        - "contract_risk"
+        - "wind_partnership"
+
+strategy:
+  visibility: "strategy_agent_only"
+  synthetic: true
+  brief_items:
+    - id: "STR-001"
+      source_label: "Synthetic market strategy memo"
+      synthetic: true
+      statement: "The wind turbine customer offers diversification potential, but its demand forecast is not yet backed by firm long-term purchase commitments."
+      certainty: "medium"
+      relevance:
+        - "strategic_value"
+        - "market_uncertainty"
+        - "diversification"
+
+    - id: "STR-002"
+      source_label: "Synthetic competitive analysis"
+      synthetic: true
+      statement: "Automotive suppliers that demonstrate AI-enabled quality capabilities early may gain preferred-supplier status."
+      certainty: "medium"
+      relevance:
+        - "competitive_position"
+        - "oem_retention"
+        - "ai_quality"
+
+technology:
+  visibility: "technology_agent_only"
+  synthetic: true
+  brief_items:
+    - id: "TECH-001"
+      source_label: "Synthetic technical readiness assessment"
+      synthetic: true
+      statement: "A minimum viable predictive quality system could be deployed on selected pilot lines within 9–12 months, but full plant-wide deployment is unlikely within 18 months without major integration risk."
+      certainty: "medium"
+      relevance:
+        - "ai_feasibility"
+        - "implementation_timeline"
+        - "predictive_quality"
+
+    - id: "TECH-002"
+      source_label: "Synthetic data infrastructure note"
+      synthetic: true
+      statement: "Legacy production systems are fragmented, so model monitoring and data governance must be built into the first deployment phase."
+      certainty: "high"
+      relevance:
+        - "data_infrastructure"
+        - "model_monitoring"
+        - "governance"

@@ -8,16 +8,24 @@ from agentic_decision_benchmark.graphs.common_nodes import make_agent_output, ma
 from agentic_decision_benchmark.llm.base import LLMProvider
 from agentic_decision_benchmark.prompts import build_generalist_prompt
 from agentic_decision_benchmark.schemas import SingleRecommendation
-from agentic_decision_benchmark.settings import BenchmarkSettings
+from agentic_decision_benchmark.settings import (
+    BenchmarkSettings,
+    build_consolidated_private_brief_pack,
+    load_private_role_briefs,
+)
 from agentic_decision_benchmark.state import BenchmarkState
 
 
 def build_single_graph(provider: LLMProvider, settings: BenchmarkSettings):
+    private_briefs = load_private_role_briefs()
+    consolidated_private_brief_pack = build_consolidated_private_brief_pack(private_briefs)
+
     def generalist_agent_node(state: dict[str, Any]) -> dict[str, Any]:
         faulty_claim = settings.faulty_claim if state.get("fault_injection") else None
         prompt = build_generalist_prompt(
             state["scenario"],
             state["candidate_strategies"],
+            consolidated_private_brief_pack=consolidated_private_brief_pack,
             faulty_claim=faulty_claim,
         )
         recommendation = provider_json(

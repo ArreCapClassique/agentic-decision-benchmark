@@ -15,6 +15,11 @@ class RunStore:
         self.run_dir = self.output_dir / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.run_dir.mkdir(parents=True, exist_ok=False)
 
+    def save_private_role_briefs(self, private_role_briefs: Any) -> Path:
+        path = self.run_dir / "private_role_briefs_used.json"
+        write_json(path, private_role_briefs)
+        return path
+
     def save_mode(self, mode: str, state: dict[str, Any]) -> Path:
         if mode not in MODE_NAMES:
             raise ValueError(f"Invalid mode folder {mode!r}")

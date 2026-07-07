@@ -13,13 +13,19 @@ from agentic_decision_benchmark.prompts import (
     build_supervisor_synthesis_prompt,
 )
 from agentic_decision_benchmark.schemas import DomainAnalysis, SupervisorPlan, SupervisorRecommendation
-from agentic_decision_benchmark.settings import BenchmarkSettings
+from agentic_decision_benchmark.settings import (
+    BenchmarkSettings,
+    format_role_private_brief,
+    get_private_brief_for_role,
+    load_private_role_briefs,
+)
 from agentic_decision_benchmark.state import BenchmarkState
 from agentic_decision_benchmark.utils.json_utils import to_jsonable
 
 
 def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
     agents = load_agents()
+    private_briefs = load_private_role_briefs()
 
     def supervisor_plan_node(state: dict[str, Any]) -> dict[str, Any]:
         prompt = build_supervisor_plan_prompt(state["scenario"], state["candidate_strategies"])
@@ -44,10 +50,12 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
         outputs = []
         for agent in agents:
             inject_fault = state.get("fault_injection") and agent.name == "Technology Agent"
+            role_brief = get_private_brief_for_role(private_briefs, agent.domain)
             prompt = build_domain_analysis_prompt(
                 agent.definition,
                 state["scenario"],
                 state["candidate_strategies"],
+                private_brief=format_role_private_brief(agent.domain, role_brief),
                 faulty_claim=settings.faulty_claim if inject_fault else None,
             )
             analysis = provider_json(

@@ -10,7 +10,12 @@ from agentic_decision_benchmark.graphs.single_graph import build_single_graph
 from agentic_decision_benchmark.graphs.supervisor_graph import build_supervisor_graph
 from agentic_decision_benchmark.llm.factory import create_provider
 from agentic_decision_benchmark.schemas import MODE_NAMES
-from agentic_decision_benchmark.settings import load_candidate_strategies, load_scenario, load_settings
+from agentic_decision_benchmark.settings import (
+    load_candidate_strategies,
+    load_private_role_briefs,
+    load_scenario,
+    load_settings,
+)
 from agentic_decision_benchmark.state import create_initial_state
 from agentic_decision_benchmark.storage.report_writer import write_comparative_report
 from agentic_decision_benchmark.storage.run_store import RunStore
@@ -64,6 +69,7 @@ def run_command(args: argparse.Namespace) -> int:
     candidate_strategies = load_candidate_strategies()
     modes = list(MODE_NAMES) if args.command == "run-all" else [args.mode]
     store = RunStore(settings.run_output_dir)
+    store.save_private_role_briefs(load_private_role_briefs())
     states: dict[str, dict[str, Any]] = {}
 
     for mode in modes:

@@ -17,6 +17,8 @@ def test_state_initializes_correctly() -> None:
     assert state["agent_outputs"] == []
     assert state["scorecards"] == []
     assert state["fault_injection"] is False
+    assert state["metadata"]["information_setting"] == "equal_total"
+    assert state["metadata"]["private_role_briefs_enabled"] is True
 
 
 def test_append_reducer_does_not_overwrite_blackboard_items() -> None:

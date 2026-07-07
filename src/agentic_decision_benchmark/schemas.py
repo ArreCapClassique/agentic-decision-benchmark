@@ -48,6 +48,30 @@ class AgentDefinition(StrictModel):
     constraints: list[str]
 
 
+class PrivateBriefItem(StrictModel):
+    id: str
+    source_label: str
+    synthetic: bool = True
+    statement: str
+    certainty: Literal["low", "medium", "high"]
+    relevance: list[str]
+
+
+class RolePrivateBrief(StrictModel):
+    visibility: str
+    synthetic: bool = True
+    brief_items: list[PrivateBriefItem]
+
+
+class PrivateRoleBriefs(StrictModel):
+    finance: RolePrivateBrief
+    operations: RolePrivateBrief
+    hr: RolePrivateBrief
+    legal: RolePrivateBrief
+    strategy: RolePrivateBrief
+    technology: RolePrivateBrief
+
+
 class BlackboardItem(StrictModel):
     round_id: int = Field(ge=0)
     author: str

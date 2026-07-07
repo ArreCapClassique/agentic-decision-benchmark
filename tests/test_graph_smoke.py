@@ -27,6 +27,8 @@ def test_single_graph_compiles_and_runs_with_mock_provider(tmp_path) -> None:
     state = graph.invoke(_initial("single"))
     assert state["final_recommendation"]["recommended_strategy"] == "C"
     assert state["evaluation"]["overall"] == 4
+    assert state["metadata"]["information_setting"] == "equal_total"
+    assert state["metadata"]["private_role_briefs_enabled"] is True
 
 
 def test_supervisor_graph_compiles_and_runs_with_mock_provider(tmp_path) -> None:
@@ -35,6 +37,8 @@ def test_supervisor_graph_compiles_and_runs_with_mock_provider(tmp_path) -> None
     assert state["final_recommendation"]["recommended_strategy"] == "C"
     assert state["evaluation"]["overall"] == 4
     assert len([item for item in state["agent_outputs"] if item.phase == "isolated_domain_analysis"]) == 6
+    assert state["metadata"]["information_setting"] == "equal_total"
+    assert state["metadata"]["private_role_briefs_enabled"] is True
 
 
 def test_self_organizing_graph_runs_with_blackboard_scorecards_and_consensus(tmp_path) -> None:
@@ -47,4 +51,6 @@ def test_self_organizing_graph_runs_with_blackboard_scorecards_and_consensus(tmp
     assert state["final_recommendation"]["agreement_ratio"] == 1.0
     assert any(item.item_type == "critique" for item in state["blackboard"])
     assert any(item.item_type == "new_information" for item in state["blackboard"])
+    assert state["metadata"]["information_setting"] == "equal_total"
+    assert state["metadata"]["private_role_briefs_enabled"] is True
 
