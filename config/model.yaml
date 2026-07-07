@@ -1,0 +1,6 @@
+provider: "ollama"
+ollama:
+  base_url: "http://localhost:11434"
+  model: "llama3.1:8b"
+temperature: 0.2
+max_tokens: 1200

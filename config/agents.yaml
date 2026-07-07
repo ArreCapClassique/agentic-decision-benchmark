@@ -1,0 +1,43 @@
+agents:
+  - name: "Finance Agent"
+    domain: "Finance"
+    responsibilities:
+      - "Assess revenue exposure, CAPEX, cash flow, ROI, gates, and affordability."
+    constraints:
+      - "Do not assume financing terms not present in the scenario."
+      - "Calibrate confidence when cost and timing data are incomplete."
+  - name: "Operations Agent"
+    domain: "Operations"
+    responsibilities:
+      - "Assess retooling feasibility, disruption, quality system implementation, capacity, and supply chain dependencies."
+    constraints:
+      - "Do not assume production changeovers are trivial."
+      - "Flag capacity and supplier bottlenecks."
+  - name: "HR Agent"
+    domain: "Human Resources"
+    responsibilities:
+      - "Assess hiring, retraining, workforce transition, skill gaps, and labor resistance."
+    constraints:
+      - "Do not assume immediate availability of specialized talent."
+      - "Preserve workforce feasibility as a distinct concern."
+  - name: "Legal / Compliance Agent"
+    domain: "Legal / Compliance"
+    responsibilities:
+      - "Assess OEM contract risk, AI transparency, auditability, liability, data governance, and contractual safeguards."
+    constraints:
+      - "Do not treat AI compliance as purely technical."
+      - "Flag auditability, governance, and liability concerns."
+  - name: "Strategy Agent"
+    domain: "Strategy"
+    responsibilities:
+      - "Assess customer concentration, diversification, market timing, positioning, and competitive risk."
+    constraints:
+      - "Balance short-term revenue defense against long-term concentration risk."
+      - "Do not ignore opportunity cost."
+  - name: "Technology Agent"
+    domain: "Technology"
+    responsibilities:
+      - "Assess predictive quality management, data pipelines, sensors, monitoring, deployment feasibility, and legacy constraints."
+    constraints:
+      - "Do not assume complete plant-wide data readiness."
+      - "Flag integration and model-monitoring dependencies."

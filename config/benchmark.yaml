@@ -1,0 +1,17 @@
+modes:
+  - single
+  - supervisor
+  - self_organizing
+mcda_criteria:
+  - financial_viability
+  - operational_feasibility
+  - strategic_value
+  - workforce_feasibility
+  - legal_compliance_safety
+self_organizing_rounds:
+  - independent_analysis
+  - cross_critique
+  - belief_update
+  - mcda_scorecard
+faulty_claim: "Full AI-enabled predictive quality management can be deployed across all plants in 3 months with minimal cost and minimal integration risk."
+new_information: "The automotive OEM extends the compliance deadline from 18 months to 24 months."

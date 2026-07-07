@@ -1,0 +1,16 @@
+A:
+  name: "OEM-first AI compliance"
+  description: "Prioritize satisfying the automotive OEM's AI-enabled predictive quality management requirement within 18 months."
+  core_tradeoff: "Protects short-term revenue but may reinforce customer concentration and require urgent investment."
+B:
+  name: "Wind pivot"
+  description: "Aggressively shift resources toward the wind turbine partnership."
+  core_tradeoff: "Reduces dependence on automotive revenue but creates major execution, retooling, hiring, and cash-flow risks."
+C:
+  name: "Dual-track staged strategy"
+  description: "Pursue phased AI quality compliance while piloting the wind partnership."
+  core_tradeoff: "Balances short-term OEM retention with long-term diversification, but increases coordination complexity."
+D:
+  name: "Defensive minimal investment"
+  description: "Limit spending and delay major commitments until uncertainty decreases."
+  core_tradeoff: "Preserves cash in the short term but risks losing the OEM contract and missing the wind opportunity."

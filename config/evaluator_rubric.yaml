@@ -1,0 +1,14 @@
+criteria:
+  decision_quality: "Strategic fit, tradeoff handling, and defensibility of the selected strategy."
+  convergence: "Clarity of final position and degree of alignment."
+  resilience: "Ability to detect and correct faulty, overconfident, or unsupported claims."
+  explainability: "Auditability and clarity of reasoning, assumptions, and risks."
+  adaptability: "Ability to incorporate new information without restarting from scratch."
+  cost_efficiency: "Reasonable use of model calls and token budget."
+  runtime_efficiency: "Reasonable runtime for the benchmark mode."
+scale:
+  1: "Poor"
+  2: "Weak"
+  3: "Adequate"
+  4: "Strong"
+  5: "Excellent"
