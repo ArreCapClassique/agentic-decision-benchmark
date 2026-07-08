@@ -58,6 +58,27 @@ It compares three structures:
 
 The purpose is not only to see which answer they choose. The project also measures whether the process is explainable, resilient, adaptable, and efficient.
 
+## Information Setting And Private Role Knowledge
+
+The benchmark uses an `equal_total` information setting. This matters because the project is trying to compare coordination mechanisms, not give one architecture more total information than another.
+
+The public case in `data/eurotech_case.md` is supplemented by synthetic private role-specific briefs in `data/private_role_briefs.yaml`. These briefs simulate knowledge that different departments might hold inside EuroTech.
+
+| Mode | Private information access |
+| --- | --- |
+| `single` | Receives all private role briefs as one consolidated information pack. |
+| `supervisor` | Each specialist receives only its own private role brief. The supervisor sees specialist outputs, not the raw private briefs. |
+| `self_organizing` | Each specialist receives only its own private role brief. Other agents learn private facts only if they are posted to the blackboard. |
+
+The private briefs are explicitly synthetic because EuroTech is fictional. They include facts such as:
+
+- Finance: EuroTech can safely allocate about EUR22M to EUR28M over 18 months, and losing the OEM puts about 30% of revenue at risk.
+- Operations: only two of five production lines have enough sensor coverage for near-term predictive quality deployment, and wind retooling could reduce automotive capacity for 4 to 6 months.
+- Human Resources: EuroTech lacks industrial data engineers and quality analytics specialists, and specialized hiring may take 6 to 9 months.
+- Legal / Compliance: the OEM requirement is traceable and auditable predictive quality management, and premature wind commitments could create penalty exposure.
+- Strategy: wind offers diversification, but demand is not backed by firm long-term purchase commitments; early AI quality capability could improve OEM supplier status.
+- Technology: a minimum viable predictive quality system may be possible on pilot lines in 9 to 12 months, but full plant-wide deployment inside 18 months is risky.
+
 ## The Three Decision-Making Modes
 
 ### 1. Single Mode
@@ -65,6 +86,8 @@ The purpose is not only to see which answer they choose. The project also measur
 This is the simplest mode.
 
 One generalist AI assistant reads the case and the four strategy options. It then produces a final recommendation, reasoning, risks, assumptions, and confidence.
+
+In the implementation, this mode is defined in `src/agentic_decision_benchmark/graphs/single_graph.py`. The generalist prompt receives the public scenario, the four strategies, the consolidated private brief pack, and the optional faulty claim when fault injection is enabled. The graph then runs the same evaluator node used by the other modes.
 
 Plain-language analogy: one consultant writes a recommendation alone.
 
@@ -95,6 +118,8 @@ The six specialist roles are:
 - Strategy
 - Technology
 
+In the implementation, this mode is defined in `src/agentic_decision_benchmark/graphs/supervisor_graph.py`. The flow is supervisor plan, six isolated domain analyses, supervisor synthesis, then evaluator scoring. The domain agents do not see each other's private briefs or outputs directly, and they do not critique each other in this mode.
+
 Plain-language analogy: a project lead asks six department experts for input, then writes the final decision.
 
 Strengths:
@@ -117,9 +142,12 @@ The same six specialist assistants participate, but there is no AI supervisor de
 
 1. Each specialist gives an independent first opinion.
 2. The specialists read the shared notes and critique each other.
-3. Each specialist updates its view after reading the critiques.
-4. Each specialist scores all four strategies against shared criteria.
-5. A deterministic scoring engine combines the scorecards and selects the result.
+3. Optional new information can be injected onto the blackboard.
+4. Each specialist updates its view after reading the critiques and visible blackboard content.
+5. Each specialist scores all four strategies against shared criteria.
+6. A deterministic scoring engine combines the scorecards and selects the result.
+
+In the implementation, this mode is defined in `src/agentic_decision_benchmark/graphs/self_organizing_graph.py`. The graph controls round order, but the final strategy is selected by deterministic MCDA consensus in `src/agentic_decision_benchmark/consensus/mcda.py`.
 
 Plain-language analogy: six experts independently study the problem, challenge each other's assumptions, revise their views, fill out score sheets, and then the final answer is calculated from the score sheets.
 
@@ -210,6 +238,8 @@ Tie-breakers favor:
 3. operational feasibility
 4. lower score disagreement
 
+If a tie still remains after those rules, the consensus result can be marked unresolved and the remaining tied strategies are recorded.
+
 This means the final self-organizing result is not decided by a hidden AI judge. It is calculated from visible scorecards.
 
 ## Fault Injection And New Information
@@ -226,6 +256,8 @@ The goal is to see whether the agents challenge that claim instead of blindly ac
 
 This tests resilience.
 
+Implementation detail: in `single` mode the claim is included in the generalist prompt. In `supervisor` and `self_organizing`, it is injected through the Technology Agent path, because the faulty claim is about AI quality deployment feasibility.
+
 ### New Information
 
 New information injection tells the system:
@@ -235,6 +267,8 @@ New information injection tells the system:
 The goal is to see whether the agents can incorporate the new timing information without restarting the whole process.
 
 This tests adaptability.
+
+Implementation detail: the current `self_organizing` graph injects this as a `new_information` blackboard item after cross-critique and before belief update. The belief-update prompt tells agents to update from previous blackboard content without restarting.
 
 ## The AI Model Providers
 
@@ -276,6 +310,7 @@ self_organizing/
 
 The saved artifacts include:
 
+- private role briefs used for the run
 - full state
 - final recommendation
 - evaluation result
@@ -283,6 +318,8 @@ The saved artifacts include:
 - blackboard, where relevant
 - scorecards, for self-organizing mode
 - a comparative Markdown report
+
+The supervisor folder also gets a `blackboard.json` file for consistency with the storage layout, but supervisor mode normally does not populate blackboard entries. The meaningful deliberation blackboard is produced by `self_organizing`.
 
 The comparative report summarizes:
 
@@ -330,6 +367,16 @@ The measured metrics include:
 - whether fault correction was detected
 - whether new information was incorporated
 
+Token counts are approximate whitespace-based estimates from the provider wrapper. They are useful for relative comparison inside this benchmark, not exact billing.
+
+With the deterministic mock provider, a typical `run-all` execution uses:
+
+| Mode | Model calls | Why |
+| --- | --- | --- |
+| `single` | 2 | one generalist call plus one evaluator call |
+| `supervisor` | 9 | one supervisor plan, six domain analyses, one supervisor synthesis, one evaluator call |
+| `self_organizing` | 25 | six calls in each of four rounds, plus one evaluator call |
+
 ## How The Project Is Organized
 
 | Area | Purpose |
@@ -342,7 +389,10 @@ The measured metrics include:
 | `config/model.yaml` | Default model provider settings. |
 | `data/eurotech_case.md` | The fictional business case. |
 | `data/candidate_strategies.yaml` | The four strategy options. |
+| `data/private_role_briefs.yaml` | Synthetic private role-specific knowledge. |
 | `src/.../main.py` | Command-line entry point. |
+| `src/.../settings.py` | Configuration, environment, scenario, strategy, and private-brief loading. |
+| `src/.../prompts.py` | Prompt builders and strict JSON instructions. |
 | `src/.../graphs/` | The three decision workflows. |
 | `src/.../agents/` | Agent loading and agent role objects. |
 | `src/.../llm/` | Mock and Ollama model providers. |
@@ -364,10 +414,32 @@ The measured metrics include:
 6. It builds the LangGraph workflow for that mode.
 7. It creates the initial run state.
 8. The graph executes the decision process.
-9. The system calculates metrics.
-10. The evaluator scores the result.
+9. The evaluator scores the result inside the graph.
+10. The system calculates deterministic metrics.
 11. The run store writes JSON files.
 12. The report writer creates a comparative Markdown report.
+
+The CLI supports these commands:
+
+```bash
+python -m agentic_decision_benchmark.main run-single
+python -m agentic_decision_benchmark.main run-supervisor
+python -m agentic_decision_benchmark.main run-self-organizing
+python -m agentic_decision_benchmark.main run-all
+```
+
+Common options include:
+
+```bash
+--provider mock
+--provider ollama
+--model llama3.1:8b
+--temperature 0.2
+--max-tokens 1200
+--output-dir runs
+--fault-injection
+--new-info
+```
 
 ## The Role Of LangGraph
 
@@ -394,6 +466,8 @@ The project uses several guardrails to keep outputs structured:
 - Scorecard values must stay between 1 and 5.
 - The self-organizing scorecard must include all four strategies.
 - The blackboard uses controlled item types.
+- The agent registry requires exactly six domain agents.
+- Prompt visibility tests check that private briefs are not leaked across roles.
 
 These guardrails make the benchmark easier to test and compare.
 
@@ -413,6 +487,22 @@ The tests check that:
 - MCDA selects the correct top strategy
 - MCDA tie-breaking behaves as designed
 - minority concerns are preserved
+- private role briefs load with all expected roles and fields
+- single mode receives all private brief sections
+- supervisor and self-organizing role prompts receive only the intended role brief plus visible blackboard content
+
+## Current Limitations
+
+Important limitations of the current repository:
+
+- The case and private role briefs are synthetic.
+- The mock provider is deterministic and useful for tests, not for measuring real model reasoning quality.
+- Ollama output quality depends on the local model and whether it follows the strict JSON prompts.
+- The evaluator is model-assisted, so its scores are useful but not external ground truth.
+- Token counts are approximate whitespace estimates.
+- OpenAI provider support is intentionally not implemented yet.
+- The self-organizing process is structured by the graph; it is not autonomous open-ended negotiation.
+- Strategy outcomes are not validated against real financial, operational, legal, or market data.
 
 ## What This System Is Good For
 
