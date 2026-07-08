@@ -49,8 +49,15 @@ def test_self_organizing_graph_runs_with_blackboard_scorecards_and_consensus(tmp
     assert len(state["scorecards"]) == 6
     assert state["final_recommendation"]["recommended_strategy"] == "C"
     assert state["final_recommendation"]["agreement_ratio"] == 1.0
+    assert state["salience_map"]
+    assert state["conflict_map"]
+    assert any(item.conflict_type == "direct_critique" for item in state["conflict_map"])
+    assert state["convergence"]
+    assert state["convergence_history"]
+    assert state["deliberation_cycle"] == state["max_deliberation_cycles"]
     assert any(item.item_type == "critique" for item in state["blackboard"])
     assert any(item.item_type == "new_information" for item in state["blackboard"])
+    assert any(item.item_type == "scorecard" for item in state["blackboard"])
     assert state["metadata"]["information_setting"] == "equal_total"
     assert state["metadata"]["private_role_briefs_enabled"] is True
 

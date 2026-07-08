@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from agentic_decision_benchmark.schemas import AgentDefinition, BlackboardItem
+from agentic_decision_benchmark.schemas import AgentDefinition, BlackboardItem, TOPIC_TAGS
 from agentic_decision_benchmark.utils.json_utils import to_jsonable
 
 
@@ -131,7 +131,10 @@ def build_self_round1_prompt(
             f"RULES: {STRICT_JSON_RULES}",
             "PHASE: Round 1 independent analysis. Do not reference other agents because you have not seen their outputs.",
             f"AGENT_PROFILE: {_payload(agent.model_dump())}",
-            "Return schema keys: claims, risks, opportunities, assumptions, questions_for_others, initial_recommendation, confidence.",
+            "Return schema keys: claims, risks, opportunities, assumptions, questions_for_others, initial_recommendation, blackboard_items, confidence.",
+            "Optional blackboard_items entries use keys: item_type, content, topic_tags, related_strategy, criterion, stance, confidence, severity.",
+            f"Allowed topic_tags: {', '.join(TOPIC_TAGS)}.",
+            "Allowed stance values: supports, opposes, neutral, challenges.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             *_private_brief_section(private_brief),
         ]
@@ -144,6 +147,8 @@ def build_self_round2_prompt(
     candidate_strategies: dict[str, Any],
     private_brief: str | None,
     blackboard: list[BlackboardItem],
+    salience_ranked_items: list[dict[str, Any]] | None = None,
+    conflict_history: list[dict[str, Any]] | None = None,
 ) -> str:
     return "\n".join(
         [
@@ -151,11 +156,24 @@ def build_self_round2_prompt(
             f"AGENT_NAME: {agent.name}",
             f"AGENT_DOMAIN: {agent.domain}",
             f"RULES: {STRICT_JSON_RULES}",
-            "PHASE: Round 2 cross-critique. Critique claims, risks, assumptions, or recommendations from other agents.",
-            "Return schema key: critiques. Each critique needs target_agent, target_claim, critique, missing_assumption, risk_introduced, severity, confidence, related_strategy.",
+            "PHASE: Round 2 agent-selected critique. Critique claims, risks, assumptions, or recommendations from other agents.",
+            "Select up to 3 blackboard items to critique.",
+            "Prioritize items that are:",
+            "1. relevant to your domain;",
+            "2. high salience;",
+            "3. high severity;",
+            "4. high confidence but weakly supported;",
+            "5. contradictory to your private role brief;",
+            "6. important to one or more candidate strategies.",
+            "No supervisor assigns your critique targets. You choose them based on local domain rules and blackboard signals.",
+            "Return schema keys: agent_name, selected_items, critiques.",
+            "Each critique needs target_item_id, target_agent, target_claim, critique, missing_assumption, risk_introduced, topic_tags, related_strategy, criterion, severity, confidence.",
+            f"Allowed topic_tags: {', '.join(TOPIC_TAGS)}.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             *_private_brief_section(private_brief),
             f"VISIBLE_BLACKBOARD: {_payload({'blackboard': blackboard})}",
+            f"SALIENCE_RANKED_ITEMS: {_payload({'items': salience_ranked_items or []})}",
+            f"CONFLICT_HISTORY: {_payload({'conflicts': conflict_history or []})}",
         ]
     )
 
@@ -166,6 +184,10 @@ def build_self_round3_prompt(
     candidate_strategies: dict[str, Any],
     private_brief: str | None,
     blackboard: list[BlackboardItem],
+    conflict_map: list[dict[str, Any]] | None = None,
+    previous_recommendation: str | None = None,
+    critiques_targeting_own_claims: list[dict[str, Any]] | None = None,
+    unresolved_high_severity_conflicts: list[dict[str, Any]] | None = None,
 ) -> str:
     return "\n".join(
         [
@@ -173,11 +195,16 @@ def build_self_round3_prompt(
             f"AGENT_NAME: {agent.name}",
             f"AGENT_DOMAIN: {agent.domain}",
             f"RULES: {STRICT_JSON_RULES}",
-            "PHASE: Round 3 belief update. Read all previous blackboard items, critiques, and new information. Update your position without restarting from scratch.",
-            "Return schema keys: updated_recommendation, changed_beliefs, accepted_critiques, rejected_critiques, remaining_concerns, confidence.",
+            "PHASE: Round 3 belief update. Read all previous blackboard items, critiques, conflict map, and new information. Update your position without restarting from scratch.",
+            "Update your position based on accepted critiques, rejected critiques, conflict map, newly revealed private information from other agents through the blackboard, and unresolved high-severity risks.",
+            "Return schema keys: agent_name, updated_recommendation, changed_beliefs, accepted_critiques, rejected_critiques, remaining_concerns, confidence.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             *_private_brief_section(private_brief),
+            f"PREVIOUS_OWN_RECOMMENDATION: {previous_recommendation or 'None'}",
             f"VISIBLE_BLACKBOARD: {_payload({'blackboard': blackboard})}",
+            f"CURRENT_CONFLICT_MAP: {_payload({'conflicts': conflict_map or []})}",
+            f"CRITIQUES_TARGETING_OWN_CLAIMS: {_payload({'critiques': critiques_targeting_own_claims or []})}",
+            f"UNRESOLVED_HIGH_SEVERITY_CONFLICTS: {_payload({'conflicts': unresolved_high_severity_conflicts or []})}",
         ]
     )
 

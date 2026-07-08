@@ -44,6 +44,44 @@ class MockProvider(BaseLLMProvider):
             "Technology Agent": "sensor coverage, pipelines, and model monitoring",
         }.get(agent, "strategic tradeoffs")
 
+    @staticmethod
+    def _json_section(prompt: str, marker: str) -> dict[str, Any]:
+        if marker not in prompt:
+            return {}
+        text = prompt.split(f"{marker}: ", 1)[1]
+        for next_marker in [
+            "\nSALIENCE_RANKED_ITEMS:",
+            "\nCONFLICT_HISTORY:",
+            "\nCURRENT_CONFLICT_MAP:",
+            "\nCRITIQUES_TARGETING_OWN_CLAIMS:",
+            "\nUNRESOLVED_HIGH_SEVERITY_CONFLICTS:",
+        ]:
+            if next_marker in text:
+                text = text.split(next_marker, 1)[0]
+        try:
+            return json.loads(text.strip())
+        except json.JSONDecodeError:
+            return {}
+
+    def _find_blackboard_item(
+        self,
+        prompt: str,
+        *,
+        author: str | None = None,
+        item_type: str | None = None,
+        content_contains: str | None = None,
+    ) -> dict[str, Any]:
+        payload = self._json_section(prompt, "VISIBLE_BLACKBOARD")
+        for item in payload.get("blackboard", []):
+            if author is not None and item.get("author") != author:
+                continue
+            if item_type is not None and item.get("item_type") != item_type:
+                continue
+            if content_contains is not None and content_contains not in item.get("content", ""):
+                continue
+            return item
+        return {}
+
     def _generalist(self) -> dict[str, Any]:
         return {
             "recommended_strategy": "C",
@@ -152,6 +190,64 @@ class MockProvider(BaseLLMProvider):
         recommendation = "C"
         if agent == "Technology Agent":
             recommendation = "A"
+        structured_items = [
+            {
+                "item_type": "claim",
+                "content": f"{agent} sees {domain} as a binding constraint on any strategy.",
+                "topic_tags": ["strategic_value"],
+                "related_strategy": recommendation,
+                "criterion": "strategic_value",
+                "stance": "supports",
+                "confidence": 0.68,
+                "severity": 3,
+            },
+            {
+                "item_type": "claim",
+                "content": "Strategy C provides the best balance of near-term OEM protection and diversification learning.",
+                "topic_tags": ["strategic_value", "diversification"],
+                "related_strategy": "C",
+                "criterion": "strategic_value",
+                "stance": "supports",
+                "confidence": 0.68,
+                "severity": 3,
+            },
+            {
+                "item_type": "risk",
+                "content": f"{agent} flags that Strategy B may overextend investment capacity and execution bandwidth.",
+                "topic_tags": ["investment_capacity", "cash_flow"],
+                "related_strategy": "B",
+                "criterion": "financial_viability",
+                "stance": "opposes",
+                "confidence": 0.72,
+                "severity": 4 if agent in {"Finance Agent", "Operations Agent"} else 3,
+            },
+        ]
+        if agent == "Technology Agent":
+            structured_items.append(
+                {
+                    "item_type": "claim",
+                    "content": "Pilot-line AI predictive quality deployment is feasible in 9 to 12 months if data readiness work starts immediately.",
+                    "topic_tags": ["ai_feasibility", "data_readiness", "implementation_timeline"],
+                    "related_strategy": "A",
+                    "criterion": "operational_feasibility",
+                    "stance": "supports",
+                    "confidence": 0.78,
+                    "severity": 4,
+                }
+            )
+        if agent == "Operations Agent":
+            structured_items.append(
+                {
+                    "item_type": "risk",
+                    "content": "Plant-wide AI rollout could disrupt production if retooling and data work are compressed.",
+                    "topic_tags": ["ai_feasibility", "production_disruption", "implementation_timeline"],
+                    "related_strategy": "A",
+                    "criterion": "operational_feasibility",
+                    "stance": "opposes",
+                    "confidence": 0.8,
+                    "severity": 4,
+                }
+            )
         return {
             "claims": [
                 f"{agent} sees {domain} as a binding constraint on any strategy.",
@@ -173,38 +269,88 @@ class MockProvider(BaseLLMProvider):
                 f"What evidence would make {agent} change its recommendation?",
             ],
             "initial_recommendation": recommendation,
+            "blackboard_items": structured_items,
             "confidence": 0.68,
         }
 
     def _round2(self, agent: str, prompt: str) -> dict[str, Any]:
+        ai_target = self._find_blackboard_item(
+            prompt,
+            author="Technology Agent",
+            item_type="claim",
+            content_contains="Pilot-line AI predictive quality deployment",
+        )
         faulty = "3 months with minimal cost and minimal integration risk" in prompt
         if faulty and agent != "Technology Agent":
+            faulty_target = self._find_blackboard_item(
+                prompt,
+                author="Technology Agent",
+                item_type="claim",
+                content_contains="3 months with minimal cost and minimal integration risk",
+            )
+            selected_target_id = faulty_target.get("id") or ai_target.get("id") or ""
             return {
+                "agent_name": agent,
+                "selected_items": [selected_target_id],
                 "critiques": [
                     {
+                        "target_item_id": selected_target_id or None,
                         "target_agent": "Technology Agent",
                         "target_claim": "Full AI-enabled predictive quality management can be deployed across all plants in 3 months with minimal cost and minimal integration risk.",
                         "critique": f"{agent} rejects this as overconfident because plant-wide predictive quality needs data readiness, integration work, governance, and staged validation.",
                         "missing_assumption": "No evidence is provided for sensor coverage, historical data quality, integration capacity, or validation resources.",
                         "risk_introduced": "Underestimating implementation scope could cause missed OEM milestones and wasted CAPEX.",
+                        "topic_tags": ["ai_feasibility", "data_readiness", "implementation_timeline"],
                         "severity": 5,
                         "confidence": 0.88,
                         "related_strategy": "A",
+                        "criterion": "operational_feasibility",
                     }
                 ]
             }
+        if agent in {"Finance Agent", "Operations Agent"} and ai_target:
+            return {
+                "agent_name": agent,
+                "selected_items": [ai_target["id"]],
+                "critiques": [
+                    {
+                        "target_item_id": ai_target["id"],
+                        "target_agent": "Technology Agent",
+                        "target_claim": ai_target["content"],
+                        "critique": f"{agent} challenges the AI feasibility claim because deployment timing depends on staged data readiness, plant integration, and governance capacity.",
+                        "missing_assumption": "The claim needs explicit evidence of sensor coverage, data quality, and implementation capacity.",
+                        "risk_introduced": "If the AI path is treated as ready too early, EuroTech could miss OEM proof points.",
+                        "topic_tags": ["ai_feasibility", "data_readiness", "implementation_timeline"],
+                        "severity": 4,
+                        "confidence": 0.82,
+                        "related_strategy": "A",
+                        "criterion": "operational_feasibility",
+                    }
+                ],
+            }
         target = "Strategy Agent" if agent != "Strategy Agent" else "Finance Agent"
+        strategy_target = self._find_blackboard_item(
+            prompt,
+            author=target,
+            item_type="claim",
+            content_contains="Strategy C provides the best balance",
+        )
         return {
+            "agent_name": agent,
+            "selected_items": [strategy_target.get("id")] if strategy_target else [],
             "critiques": [
                 {
+                    "target_item_id": strategy_target.get("id"),
                     "target_agent": target,
                     "target_claim": "Strategy C provides the best balance of near-term OEM protection and diversification learning.",
                     "critique": f"{agent} says this balance is plausible but needs explicit sequencing and decision gates.",
                     "missing_assumption": "The claim assumes management capacity for dual execution.",
                     "risk_introduced": "Without sequencing, the dual-track option may dilute focus.",
+                    "topic_tags": ["strategic_value", "implementation_timeline"],
                     "severity": 3,
                     "confidence": 0.74,
                     "related_strategy": "C",
+                    "criterion": "strategic_value",
                 }
             ]
         }
@@ -220,6 +366,7 @@ class MockProvider(BaseLLMProvider):
             changed.append("The 24-month deadline improves feasibility of phased OEM compliance.")
             concerns.append("New timing relief should not be used to delay data-readiness work.")
         return {
+            "agent_name": agent,
             "updated_recommendation": "C",
             "changed_beliefs": changed,
             "accepted_critiques": accepted,

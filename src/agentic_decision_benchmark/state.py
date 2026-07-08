@@ -3,7 +3,7 @@ from __future__ import annotations
 import operator
 from typing import Annotated, Any, TypedDict, get_args
 
-from agentic_decision_benchmark.schemas import AgentOutput, BlackboardItem, ModeName, Scorecard
+from agentic_decision_benchmark.schemas import AgentOutput, BlackboardItem, ConvergenceStatus, ModeName, Scorecard
 
 
 class BenchmarkState(TypedDict):
@@ -18,6 +18,13 @@ class BenchmarkState(TypedDict):
     final_recommendation: dict[str, Any]
     metrics: dict[str, Any]
     evaluation: dict[str, Any]
+    deliberation_cycle: int
+    max_deliberation_cycles: int
+    salience_map: dict[str, Any]
+    conflict_map: list[Any]
+    convergence: dict[str, Any] | ConvergenceStatus
+    convergence_history: Annotated[list[Any], operator.add]
+    new_information_injected: bool
     fault_injection: bool
     new_info_injection: bool
 
@@ -52,6 +59,13 @@ def create_initial_state(
         "final_recommendation": {},
         "metrics": {},
         "evaluation": {},
+        "deliberation_cycle": 0,
+        "max_deliberation_cycles": 2,
+        "salience_map": {},
+        "conflict_map": [],
+        "convergence": {},
+        "convergence_history": [],
+        "new_information_injected": False,
         "fault_injection": fault_injection,
         "new_info_injection": new_info_injection,
     }

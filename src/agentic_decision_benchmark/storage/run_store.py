@@ -33,5 +33,8 @@ class RunStore:
             write_json(mode_dir / "blackboard.json", state.get("blackboard", []))
         if mode == "self_organizing":
             write_json(mode_dir / "scorecards.json", state.get("scorecards", []))
+            write_json(mode_dir / "salience_map.json", state.get("salience_map", {}))
+            write_json(mode_dir / "conflict_map.json", state.get("conflict_map", []))
+            write_json(mode_dir / "convergence.json", state.get("convergence", {}))
         return mode_dir
 

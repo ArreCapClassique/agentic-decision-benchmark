@@ -16,6 +16,13 @@ def test_state_initializes_correctly() -> None:
     assert state["blackboard"] == []
     assert state["agent_outputs"] == []
     assert state["scorecards"] == []
+    assert state["deliberation_cycle"] == 0
+    assert state["max_deliberation_cycles"] == 2
+    assert state["salience_map"] == {}
+    assert state["conflict_map"] == []
+    assert state["convergence"] == {}
+    assert state["convergence_history"] == []
+    assert state["new_information_injected"] is False
     assert state["fault_injection"] is False
     assert state["metadata"]["information_setting"] == "equal_total"
     assert state["metadata"]["private_role_briefs_enabled"] is True
@@ -33,5 +40,5 @@ def test_mode_validation() -> None:
     assert validate_mode("supervisor") == "supervisor"
     assert validate_mode("self_organizing") == "self_organizing"
     with pytest.raises(ValueError):
-        validate_mode("swarm")
+        validate_mode("committee")
 

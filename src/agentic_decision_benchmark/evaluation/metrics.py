@@ -25,6 +25,9 @@ def compute_metrics(state: dict[str, Any], provider: LLMProvider, runtime_second
     blackboard: list[BlackboardItem] = list(state.get("blackboard", []))
     scorecards: list[Scorecard] = list(state.get("scorecards", []))
     final_recommendation = state.get("final_recommendation", {})
+    conflict_map = [to_jsonable(item) for item in state.get("conflict_map", [])]
+    salience_map = {key: to_jsonable(value) for key, value in state.get("salience_map", {}).items()}
+    convergence_history = [to_jsonable(item) for item in state.get("convergence_history", [])]
     stats = _provider_stats(provider)
     aggregate_scores = final_recommendation.get("aggregate_scores", {}) if isinstance(final_recommendation, dict) else {}
     stdev_values = [
@@ -58,6 +61,32 @@ def compute_metrics(state: dict[str, Any], provider: LLMProvider, runtime_second
         and ("24-month" in state_text or "24 months" in state_text)
         and any(word in state_text for word in ["belief", "feasibility", "deadline", "phased"])
     )
+    conflict_type_counts = {
+        conflict_type: sum(1 for item in conflict_map if item.get("conflict_type") == conflict_type)
+        for conflict_type in ("direct_critique", "opposing_stances", "risk_cluster")
+    }
+    unresolved_high_severity_conflicts = sum(
+        1
+        for item in conflict_map
+        if int(item.get("severity", 0)) >= 4 and item.get("status") == "unresolved"
+    )
+    salience_values = [float(item.get("salience", 0.0)) for item in salience_map.values()]
+    blackboard_by_id = {item.id: item for item in blackboard}
+    top_salience_items = []
+    for item_id, record in sorted(salience_map.items(), key=lambda entry: (-float(entry[1].get("salience", 0.0)), entry[0]))[:5]:
+        blackboard_item = blackboard_by_id.get(item_id)
+        top_salience_items.append(
+            {
+                "item_id": item_id,
+                "salience": record.get("salience", 0.0),
+                "author": blackboard_item.author if blackboard_item else None,
+                "item_type": blackboard_item.item_type if blackboard_item else None,
+                "content": blackboard_item.content if blackboard_item else None,
+            }
+        )
+    deliberation_cycle = int(state.get("deliberation_cycle", 0) or 0)
+    max_deliberation_cycles = int(state.get("max_deliberation_cycles", 0) or 0)
+    latest_convergence = to_jsonable(state.get("convergence", {}))
 
     return Metrics(
         runtime_seconds=round(runtime_seconds, 4),
@@ -76,6 +105,24 @@ def compute_metrics(state: dict[str, Any], provider: LLMProvider, runtime_second
         final_selected_strategy=final_strategy,
         fault_correction_detected=fault_corrected,
         new_information_incorporated=new_info_incorporated,
+        deliberation_cycles_used=deliberation_cycle,
+        max_deliberation_cycles=max_deliberation_cycles,
+        converged_before_max_cycles=bool(latest_convergence.get("converged") and deliberation_cycle < max_deliberation_cycles),
+        number_of_conflicts=len(conflict_map),
+        number_of_direct_critique_conflicts=conflict_type_counts["direct_critique"],
+        number_of_opposing_stance_conflicts=conflict_type_counts["opposing_stances"],
+        number_of_risk_cluster_conflicts=conflict_type_counts["risk_cluster"],
+        unresolved_high_severity_conflicts=unresolved_high_severity_conflicts,
+        agreement_ratio_after_each_cycle=[
+            float(item.get("agreement_ratio", 0.0))
+            for item in convergence_history
+        ],
+        low_confidence_agents_after_each_cycle=[
+            list(item.get("low_confidence_agents", []))
+            for item in convergence_history
+        ],
+        average_salience=round(sum(salience_values) / len(salience_values), 4) if salience_values else 0.0,
+        top_salience_items=top_salience_items,
     )
 
 

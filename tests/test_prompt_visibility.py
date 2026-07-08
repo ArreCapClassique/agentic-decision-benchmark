@@ -90,4 +90,6 @@ def test_self_round2_prompt_contains_blackboard_and_own_private_brief() -> None:
     )
     assert "TECH-001" in prompt
     assert "Visible blackboard content from a prior round." in prompt
+    assert "Select up to 3 blackboard items to critique." in prompt
+    assert "No supervisor assigns your critique targets." in prompt
     assert "FIN-001" not in prompt

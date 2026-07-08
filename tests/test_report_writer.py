@@ -20,3 +20,5 @@ def test_report_includes_information_setting_and_synthetic_private_briefs(tmp_pa
 
     assert "Information setting: equal_total" in report
     assert "synthetic private role briefs" in report
+    assert "Self-Organizing Deliberation Loop" in report
+    assert "deterministic conflict map" in report

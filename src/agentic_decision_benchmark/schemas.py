@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import field_validator
 
 ModeName = Literal["single", "supervisor", "self_organizing"]
 StrategyId = Literal["A", "B", "C", "D"]
@@ -19,6 +21,32 @@ BlackboardItemType = Literal[
     "new_information",
     "consensus",
 ]
+BlackboardStance = Literal["supports", "opposes", "neutral", "challenges"]
+TopicTag = Literal[
+    "financial_viability",
+    "investment_capacity",
+    "cash_flow",
+    "revenue_exposure",
+    "operational_feasibility",
+    "retooling_risk",
+    "production_disruption",
+    "data_readiness",
+    "ai_feasibility",
+    "implementation_timeline",
+    "workforce_feasibility",
+    "hiring_timeline",
+    "skill_gap",
+    "compliance",
+    "auditability",
+    "contract_risk",
+    "strategic_value",
+    "diversification",
+    "market_uncertainty",
+    "customer_concentration",
+    "uncategorized",
+]
+ConflictType = Literal["direct_critique", "opposing_stances", "risk_cluster", "score_divergence"]
+ConflictStatus = Literal["unresolved", "partially_resolved", "resolved"]
 
 STRATEGY_IDS: tuple[StrategyId, ...] = ("A", "B", "C", "D")
 MODE_NAMES: tuple[str, ...] = ("single", "supervisor", "self_organizing")
@@ -29,6 +57,58 @@ MCDA_CRITERIA: tuple[str, ...] = (
     "workforce_feasibility",
     "legal_compliance_safety",
 )
+TOPIC_TAGS: tuple[str, ...] = (
+    "financial_viability",
+    "investment_capacity",
+    "cash_flow",
+    "revenue_exposure",
+    "operational_feasibility",
+    "retooling_risk",
+    "production_disruption",
+    "data_readiness",
+    "ai_feasibility",
+    "implementation_timeline",
+    "workforce_feasibility",
+    "hiring_timeline",
+    "skill_gap",
+    "compliance",
+    "auditability",
+    "contract_risk",
+    "strategic_value",
+    "diversification",
+    "market_uncertainty",
+    "customer_concentration",
+    "uncategorized",
+)
+VALID_TOPIC_TAGS = set(TOPIC_TAGS)
+VALID_BLACKBOARD_STANCES = {"supports", "opposes", "neutral", "challenges"}
+
+
+def normalize_topic_tags(value: Any) -> list[TopicTag]:
+    raw_values = value if isinstance(value, list) else [value] if value else []
+    normalized: list[str] = []
+    for raw in raw_values:
+        tag = str(raw).strip().lower().replace("-", "_").replace(" ", "_")
+        if tag in VALID_TOPIC_TAGS and tag not in normalized:
+            normalized.append(tag)
+    if not normalized:
+        normalized.append("uncategorized")
+    return normalized  # type: ignore[return-value]
+
+
+def normalize_blackboard_stance(value: Any) -> BlackboardStance | None:
+    if value is None or value == "":
+        return None
+    normalized = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized not in VALID_BLACKBOARD_STANCES:
+        raise ValueError(f"Invalid blackboard stance {value!r}. Expected one of {sorted(VALID_BLACKBOARD_STANCES)}")
+    return normalized  # type: ignore[return-value]
+
+
+def deterministic_blackboard_id(parts: list[Any]) -> str:
+    payload = "|".join("" if item is None else str(item) for item in parts)
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
+    return f"bb-{digest}"
 
 
 class StrictModel(BaseModel):
@@ -72,16 +152,72 @@ class PrivateRoleBriefs(StrictModel):
     technology: RolePrivateBrief
 
 
+class BlackboardContribution(StrictModel):
+    item_type: BlackboardItemType
+    content: str
+    topic_tags: list[TopicTag] = Field(default_factory=lambda: ["uncategorized"])
+    related_strategy: StrategyId | None = None
+    criterion: str | None = None
+    stance: BlackboardStance | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    severity: int | None = Field(default=None, ge=1, le=5)
+
+    @field_validator("topic_tags", mode="before")
+    @classmethod
+    def normalize_tags(cls, value: Any) -> list[TopicTag]:
+        return normalize_topic_tags(value)
+
+    @field_validator("stance", mode="before")
+    @classmethod
+    def normalize_stance(cls, value: Any) -> BlackboardStance | None:
+        return normalize_blackboard_stance(value)
+
+
 class BlackboardItem(StrictModel):
+    id: str = ""
     round_id: int = Field(ge=0)
+    cycle_id: int = Field(default=0, ge=0)
     author: str
     item_type: BlackboardItemType
     content: str
+    topic_tags: list[TopicTag] = Field(default_factory=lambda: ["uncategorized"])
+    related_strategy: StrategyId | None = None
+    criterion: str | None = None
+    stance: BlackboardStance | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     target_agent: str | None = None
     target_claim: str | None = None
-    related_strategy: StrategyId | None = None
+    target_item_id: str | None = None
     severity: int | None = Field(default=None, ge=1, le=5)
+
+    @field_validator("topic_tags", mode="before")
+    @classmethod
+    def normalize_tags(cls, value: Any) -> list[TopicTag]:
+        return normalize_topic_tags(value)
+
+    @field_validator("stance", mode="before")
+    @classmethod
+    def normalize_stance(cls, value: Any) -> BlackboardStance | None:
+        return normalize_blackboard_stance(value)
+
+    @model_validator(mode="after")
+    def populate_id(self) -> "BlackboardItem":
+        if not self.id:
+            self.id = deterministic_blackboard_id(
+                [
+                    self.round_id,
+                    self.cycle_id,
+                    self.author,
+                    self.item_type,
+                    self.content,
+                    self.related_strategy,
+                    self.criterion,
+                    self.target_item_id,
+                    self.target_agent,
+                    self.target_claim,
+                ]
+            )
+        return self
 
 
 class AgentOutput(StrictModel):
@@ -135,25 +271,37 @@ class Round1Analysis(StrictModel):
     assumptions: list[str]
     questions_for_others: list[str]
     initial_recommendation: StrategyId
+    blackboard_items: list[BlackboardContribution] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
 
 
 class Critique(StrictModel):
+    target_item_id: str | None = None
     target_agent: str
     target_claim: str
     critique: str
     missing_assumption: str
     risk_introduced: str
+    topic_tags: list[TopicTag] = Field(default_factory=lambda: ["uncategorized"])
     severity: int = Field(ge=1, le=5)
     confidence: float = Field(ge=0.0, le=1.0)
     related_strategy: StrategyId | None = None
+    criterion: str | None = None
+
+    @field_validator("topic_tags", mode="before")
+    @classmethod
+    def normalize_tags(cls, value: Any) -> list[TopicTag]:
+        return normalize_topic_tags(value)
 
 
 class Round2CritiqueOutput(StrictModel):
+    agent_name: str = ""
+    selected_items: list[str] = Field(default_factory=list)
     critiques: list[Critique]
 
 
 class Round3BeliefUpdate(StrictModel):
+    agent_name: str = ""
     updated_recommendation: StrategyId
     changed_beliefs: list[str]
     accepted_critiques: list[str]
@@ -234,6 +382,43 @@ class ConsensusResult(StrictModel):
     unresolved_strategies: list[StrategyId] = Field(default_factory=list)
 
 
+class SalienceRecord(StrictModel):
+    item_id: str
+    severity: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    novelty: float = Field(ge=0.0, le=1.0)
+    critique_count: int = Field(ge=0)
+    support_count: int = Field(ge=0)
+    salience: float = Field(ge=0.0, le=1.0)
+    domain_relevance: dict[str, float] = Field(default_factory=dict)
+
+
+class ConflictItem(StrictModel):
+    id: str
+    cycle_id: int = Field(ge=0)
+    conflict_type: ConflictType
+    topic: str
+    related_strategy: StrategyId | None = None
+    criterion: str | None = None
+    central_item_id: str | None = None
+    supporting_items: list[str] = Field(default_factory=list)
+    challenging_items: list[str] = Field(default_factory=list)
+    agents_involved: list[str] = Field(default_factory=list)
+    severity: int = Field(ge=1, le=5)
+    status: ConflictStatus = "unresolved"
+    summary: str
+
+
+class ConvergenceStatus(StrictModel):
+    cycle_id: int = Field(ge=0)
+    converged: bool
+    leading_strategy: StrategyId | None = None
+    agreement_ratio: float = Field(ge=0.0, le=1.0)
+    unresolved_high_severity_conflicts: int = Field(ge=0)
+    low_confidence_agents: list[str] = Field(default_factory=list)
+    reason: str
+
+
 class EvaluationResult(StrictModel):
     decision_quality: int = Field(ge=1, le=5)
     convergence: int = Field(ge=1, le=5)
@@ -264,6 +449,18 @@ class Metrics(StrictModel):
     final_selected_strategy: StrategyId | None = None
     fault_correction_detected: bool = False
     new_information_incorporated: bool = False
+    deliberation_cycles_used: int = 0
+    max_deliberation_cycles: int = 0
+    converged_before_max_cycles: bool = False
+    number_of_conflicts: int = 0
+    number_of_direct_critique_conflicts: int = 0
+    number_of_opposing_stance_conflicts: int = 0
+    number_of_risk_cluster_conflicts: int = 0
+    unresolved_high_severity_conflicts: int = 0
+    agreement_ratio_after_each_cycle: list[float] = Field(default_factory=list)
+    low_confidence_agents_after_each_cycle: list[list[str]] = Field(default_factory=list)
+    average_salience: float = 0.0
+    top_salience_items: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ProviderStats(StrictModel):

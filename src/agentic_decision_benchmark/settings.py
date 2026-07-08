@@ -44,6 +44,7 @@ class BenchmarkSettings(BaseModel):
     run_output_dir: Path = Field(default_factory=lambda: PROJECT_ROOT / "runs")
     faulty_claim: str
     new_information: str
+    max_deliberation_cycles: int = 2
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -143,6 +144,7 @@ def load_settings(
         else Path(configured_output_dir),
         faulty_claim=str(benchmark["faulty_claim"]),
         new_information=str(benchmark["new_information"]),
+        max_deliberation_cycles=int(benchmark.get("max_deliberation_cycles", 2)),
     )
 
 
