@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from agentic_decision_benchmark.llm.base import BaseLLMProvider
@@ -55,6 +56,7 @@ class MockProvider(BaseLLMProvider):
             "\nCURRENT_CONFLICT_MAP:",
             "\nCRITIQUES_TARGETING_OWN_CLAIMS:",
             "\nUNRESOLVED_HIGH_SEVERITY_CONFLICTS:",
+            "\nDETERMINISTIC_METRICS:",
         ]:
             if next_marker in text:
                 text = text.split(next_marker, 1)[0]
@@ -62,6 +64,22 @@ class MockProvider(BaseLLMProvider):
             return json.loads(text.strip())
         except json.JSONDecodeError:
             return {}
+
+    @staticmethod
+    def _trailing_json_section(prompt: str, marker: str) -> dict[str, Any]:
+        if marker not in prompt:
+            return {}
+        text = prompt.split(f"{marker}: ", 1)[1].strip()
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _score(value: float) -> float:
+        bounded = min(5.0, max(1.0, value))
+        return float(Decimal(str(bounded)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
 
     def _find_blackboard_item(
         self,
@@ -435,19 +453,71 @@ class MockProvider(BaseLLMProvider):
         return {"scores": scores, "confidence": 0.82}
 
     def _evaluator(self, prompt: str) -> dict[str, Any]:
-        text = prompt.lower()
-        explainability = 4 if "number_of_blackboard_items" in text else 3
-        resilience = 4 if "fault_correction_detected" in text and "true" in text else 3
-        adaptability = 4 if "new_information_incorporated" in text and "true" in text else 3
+        metrics = self._trailing_json_section(prompt, "DETERMINISTIC_METRICS")
+        final_recommendation = self._json_section(prompt, "FINAL_RECOMMENDATION")
+        model_calls = float(metrics.get("model_calls", 0) or 0)
+        tokens = float(metrics.get("total_estimated_tokens", 0) or 0)
+        blackboard_items = float(metrics.get("number_of_blackboard_items", 0) or 0)
+        scorecards = float(metrics.get("number_of_scorecards", 0) or 0)
+        conflicts = float(metrics.get("number_of_conflicts", 0) or 0)
+        critique_items = float(metrics.get("number_of_critique_items", 0) or 0)
+        belief_updates = float(metrics.get("number_of_belief_update_items", 0) or 0)
+        rounds = float(metrics.get("number_of_rounds", 0) or 0)
+        agreement_ratio = metrics.get("agreement_ratio")
+        unresolved_conflicts = float(metrics.get("unresolved_high_severity_conflicts", 0) or 0)
+
+        has_structured_consensus = bool(final_recommendation.get("aggregate_scores"))
+        has_tradeoff_fields = any(
+            final_recommendation.get(field)
+            for field in ("reasoning", "synthesis", "tradeoffs", "risks", "assumptions", "unresolved_risks")
+        )
+
+        if agreement_ratio is None:
+            convergence = 3.5 + min(rounds, 2.0) * 0.1
+        else:
+            convergence = 3.4 + (float(agreement_ratio) * 1.0) - min(unresolved_conflicts, 5.0) * 0.06
+
+        scores = {
+            "decision_quality": self._score(
+                3.6
+                + (0.2 if has_tradeoff_fields else 0.0)
+                + (0.3 if has_structured_consensus else 0.0)
+                + (0.1 if metrics.get("final_selected_strategy") == "C" else 0.0)
+            ),
+            "convergence": self._score(convergence),
+            "resilience": self._score(
+                4.4
+                if metrics.get("fault_correction_detected")
+                else 3.2 + min(critique_items / 12.0, 0.5) + min(conflicts / 10.0, 0.3)
+            ),
+            "explainability": self._score(
+                3.1
+                + min(blackboard_items / 60.0, 1.0) * 0.9
+                + min(scorecards / 6.0, 1.0) * 0.4
+                + min(conflicts / 6.0, 1.0) * 0.3
+                + (0.2 if rounds > 1 else 0.0)
+            ),
+            "adaptability": self._score(
+                4.3
+                if metrics.get("new_information_incorporated")
+                else 3.2 + min(belief_updates / 36.0, 0.4)
+            ),
+            "cost_efficiency": self._score(5.0 - (model_calls * 0.18) - (tokens / 30000.0)),
+            "runtime_efficiency": self._score(5.0 - (model_calls * 0.12) - (tokens / 50000.0)),
+        }
+        weights = {
+            "decision_quality": 0.25,
+            "convergence": 0.12,
+            "resilience": 0.15,
+            "explainability": 0.18,
+            "adaptability": 0.12,
+            "cost_efficiency": 0.10,
+            "runtime_efficiency": 0.08,
+        }
+        weighted = sum(scores[key] * weight for key, weight in weights.items())
+        scores["overall"] = float(Decimal(str(weighted)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
         return {
-            "decision_quality": 4,
-            "convergence": 4,
-            "resilience": resilience,
-            "explainability": explainability,
-            "adaptability": adaptability,
-            "cost_efficiency": 4,
-            "runtime_efficiency": 4,
-            "overall": 4,
+            **scores,
             "rationale": "The answer selects a defensible staged strategy, identifies tradeoffs, and exposes enough assumptions and risks for audit.",
         }
 

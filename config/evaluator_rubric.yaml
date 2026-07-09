@@ -6,9 +6,56 @@ criteria:
   adaptability: "Ability to incorporate new information without restarting from scratch."
   cost_efficiency: "Reasonable use of model calls and token budget."
   runtime_efficiency: "Reasonable runtime for the benchmark mode."
+
 scale:
-  1: "Poor"
-  2: "Weak"
-  3: "Adequate"
-  4: "Strong"
-  5: "Excellent"
+  min: 1.0
+  max: 5.0
+  step: 0.1
+  labels:
+    1.0: "Poor"
+    2.0: "Weak"
+    3.0: "Adequate"
+    4.0: "Strong"
+    5.0: "Excellent"
+
+scoring_guidance:
+  decision_quality:
+    1.0: "Strategically weak, poorly justified, or ignores major constraints."
+    3.0: "Reasonable but generic; handles some tradeoffs but misses important tensions."
+    5.0: "Highly defensible, specific, and integrates finance, operations, HR, legal, strategy, and technology constraints."
+  convergence:
+    1.0: "Unclear or unstable final position."
+    3.0: "Clear final position but unresolved disagreement is weakly explained."
+    5.0: "Clear final position with well-explained agreement, dissent, and unresolved conflicts."
+  resilience:
+    1.0: "Fails to detect faulty, unsupported, or overconfident claims."
+    3.0: "Partially detects problems but does not fully correct or incorporate them."
+    5.0: "Clearly detects, challenges, and corrects faulty or unsupported claims."
+  explainability:
+    1.0: "Reasoning is opaque or mostly unsupported."
+    3.0: "Reasoning is understandable but lacks detailed traceability."
+    5.0: "Reasoning is highly auditable, with clear assumptions, evidence, conflicts, and risk trace."
+  adaptability:
+    1.0: "Does not incorporate new information."
+    3.0: "Mentions new information but only partially adjusts reasoning."
+    5.0: "Clearly updates reasoning, recommendation, or confidence based on new information."
+  cost_efficiency:
+    1.0: "Very high model-call or token cost relative to output quality."
+    3.0: "Moderate cost for reasonable output quality."
+    5.0: "High-quality output with efficient model-call and token use."
+  runtime_efficiency:
+    1.0: "Runtime is excessive for the benchmark purpose."
+    3.0: "Runtime is acceptable but not efficient."
+    5.0: "Runtime is efficient for the benchmark mode."
+
+overall_score:
+  method: "weighted_average"
+  weights:
+    decision_quality: 0.25
+    convergence: 0.12
+    resilience: 0.15
+    explainability: 0.18
+    adaptability: 0.12
+    cost_efficiency: 0.10
+    runtime_efficiency: 0.08
+  rounding: 1

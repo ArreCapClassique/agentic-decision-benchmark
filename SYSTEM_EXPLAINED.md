@@ -381,6 +381,8 @@ The evaluation categories are:
 - runtime efficiency
 - overall score
 
+The evaluator uses decimal scores from `1.0` to `5.0`. Decimal scores reduce evaluator flattening and allow finer distinctions between architectures that choose the same final strategy but differ in reasoning quality, auditability, resilience, or cost.
+
 The measured metrics include:
 
 - runtime

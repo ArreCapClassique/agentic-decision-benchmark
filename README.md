@@ -90,6 +90,12 @@ convergence.json
 scorecards.json
 ```
 
+## Evaluation Scores
+
+The evaluator uses decimal scores from `1.0` to `5.0` for decision quality, convergence, resilience, explainability, adaptability, cost efficiency, runtime efficiency, and overall score.
+
+Decimal scores reduce evaluator flattening and allow finer distinctions between architectures that choose the same final strategy but differ in reasoning quality, auditability, resilience, or cost.
+
 ## Private Role-Specific Knowledge
 
 The benchmark uses synthetic private role-specific briefs because the EuroTech case is fictional but the challenge requires specialized agents with partial knowledge.

@@ -26,7 +26,9 @@ def test_single_graph_compiles_and_runs_with_mock_provider(tmp_path) -> None:
     graph = build_single_graph(MockProvider(), _settings(tmp_path))
     state = graph.invoke(_initial("single"))
     assert state["final_recommendation"]["recommended_strategy"] == "C"
-    assert state["evaluation"]["overall"] == 4
+    assert state["evaluation"]["overall"] == 3.7
+    assert state["evaluation"]["cost_efficiency"] > 4.0
+    assert state["evaluation"]["runtime_efficiency"] > 4.0
     assert state["metadata"]["information_setting"] == "equal_total"
     assert state["metadata"]["private_role_briefs_enabled"] is True
 
@@ -35,7 +37,8 @@ def test_supervisor_graph_compiles_and_runs_with_mock_provider(tmp_path) -> None
     graph = build_supervisor_graph(MockProvider(), _settings(tmp_path))
     state = graph.invoke(_initial("supervisor"))
     assert state["final_recommendation"]["recommended_strategy"] == "C"
-    assert state["evaluation"]["overall"] == 4
+    assert state["evaluation"]["overall"] == 3.5
+    assert 3.0 <= state["evaluation"]["cost_efficiency"] < 4.0
     assert len([item for item in state["agent_outputs"] if item.phase == "isolated_domain_analysis"]) == 6
     assert state["metadata"]["information_setting"] == "equal_total"
     assert state["metadata"]["private_role_briefs_enabled"] is True
@@ -49,6 +52,11 @@ def test_self_organizing_graph_runs_with_blackboard_scorecards_and_consensus(tmp
     assert len(state["scorecards"]) == 6
     assert state["final_recommendation"]["recommended_strategy"] == "C"
     assert state["final_recommendation"]["agreement_ratio"] == 1.0
+    assert state["evaluation"]["overall"] == 3.8
+    assert state["evaluation"]["resilience"] > 4.0
+    assert state["evaluation"]["explainability"] > 4.0
+    assert state["evaluation"]["adaptability"] > 4.0
+    assert state["evaluation"]["cost_efficiency"] < 2.0
     assert state["salience_map"]
     assert state["conflict_map"]
     assert any(item.conflict_type == "direct_critique" for item in state["conflict_map"])

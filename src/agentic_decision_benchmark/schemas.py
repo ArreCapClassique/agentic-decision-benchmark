@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -419,16 +420,43 @@ class ConvergenceStatus(StrictModel):
     reason: str
 
 
+def _round_score_one_decimal(value: Any) -> float:
+    try:
+        score = Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"Invalid evaluator score {value!r}") from exc
+    if not score.is_finite():
+        raise ValueError(f"Evaluator score must be finite, got {value!r}")
+    if score < Decimal("1.0") or score > Decimal("5.0"):
+        raise ValueError(f"Evaluator score must be between 1.0 and 5.0, got {value!r}")
+    return float(score.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
 class EvaluationResult(StrictModel):
-    decision_quality: int = Field(ge=1, le=5)
-    convergence: int = Field(ge=1, le=5)
-    resilience: int = Field(ge=1, le=5)
-    explainability: int = Field(ge=1, le=5)
-    adaptability: int = Field(ge=1, le=5)
-    cost_efficiency: int = Field(ge=1, le=5)
-    runtime_efficiency: int = Field(ge=1, le=5)
-    overall: int = Field(ge=1, le=5)
+    decision_quality: float = Field(ge=1.0, le=5.0)
+    convergence: float = Field(ge=1.0, le=5.0)
+    resilience: float = Field(ge=1.0, le=5.0)
+    explainability: float = Field(ge=1.0, le=5.0)
+    adaptability: float = Field(ge=1.0, le=5.0)
+    cost_efficiency: float = Field(ge=1.0, le=5.0)
+    runtime_efficiency: float = Field(ge=1.0, le=5.0)
+    overall: float = Field(ge=1.0, le=5.0)
     rationale: str
+
+    @field_validator(
+        "decision_quality",
+        "convergence",
+        "resilience",
+        "explainability",
+        "adaptability",
+        "cost_efficiency",
+        "runtime_efficiency",
+        "overall",
+        mode="before",
+    )
+    @classmethod
+    def normalize_score(cls, value: Any) -> float:
+        return _round_score_one_decimal(value)
 
 
 class Metrics(StrictModel):

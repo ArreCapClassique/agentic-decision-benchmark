@@ -7,12 +7,32 @@ from typing import Any
 from agentic_decision_benchmark.schemas import MODE_NAMES
 from agentic_decision_benchmark.utils.json_utils import to_jsonable
 
+EVALUATION_TABLE_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("Decision", "decision_quality"),
+    ("Convergence", "convergence"),
+    ("Resilience", "resilience"),
+    ("Explainability", "explainability"),
+    ("Adaptability", "adaptability"),
+    ("Cost Efficiency", "cost_efficiency"),
+    ("Runtime Efficiency", "runtime_efficiency"),
+    ("Overall", "overall"),
+)
+
 
 def _table(headers: list[str], rows: list[list[Any]]) -> str:
     header = "| " + " | ".join(headers) + " |"
     separator = "| " + " | ".join("---" for _ in headers) + " |"
     body = ["| " + " | ".join(str(cell) for cell in row) + " |" for row in rows]
     return "\n".join([header, separator] + body)
+
+
+def _format_evaluation_score(value: Any) -> str:
+    if value is None:
+        return "-"
+    try:
+        return f"{float(value):.1f}"
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def _strategy_name(strategies: dict[str, Any], strategy_id: str | None) -> str:
@@ -38,7 +58,20 @@ def _mode_rows(states: dict[str, dict[str, Any]], strategies: dict[str, Any]) ->
                 _strategy_name(strategies, final.get("recommended_strategy")),
                 metrics.get("model_calls", "-"),
                 metrics.get("total_estimated_tokens", "-"),
-                evaluation.get("overall", "-"),
+                _format_evaluation_score(evaluation.get("overall")),
+            ]
+        )
+    return rows
+
+
+def _evaluation_rows(states: dict[str, dict[str, Any]]) -> list[list[Any]]:
+    rows = []
+    for mode in MODE_NAMES:
+        evaluation = states.get(mode, {}).get("evaluation", {})
+        rows.append(
+            [
+                mode,
+                *[_format_evaluation_score(evaluation.get(key)) for _, key in EVALUATION_TABLE_COLUMNS],
             ]
         )
     return rows
@@ -223,19 +256,8 @@ def write_comparative_report(run_dir: Path, states: dict[str, dict[str, Any]]) -
         "",
         "## Evaluation Table",
         _table(
-            ["Mode", "Decision", "Convergence", "Resilience", "Explainability", "Adaptability", "Overall"],
-            [
-                [
-                    mode,
-                    states.get(mode, {}).get("evaluation", {}).get("decision_quality", "-"),
-                    states.get(mode, {}).get("evaluation", {}).get("convergence", "-"),
-                    states.get(mode, {}).get("evaluation", {}).get("resilience", "-"),
-                    states.get(mode, {}).get("evaluation", {}).get("explainability", "-"),
-                    states.get(mode, {}).get("evaluation", {}).get("adaptability", "-"),
-                    states.get(mode, {}).get("evaluation", {}).get("overall", "-"),
-                ]
-                for mode in MODE_NAMES
-            ],
+            ["Mode", *[header for header, _ in EVALUATION_TABLE_COLUMNS]],
+            _evaluation_rows(states),
         ),
         "",
         "## Final Recommendations By Mode",
