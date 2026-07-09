@@ -32,6 +32,14 @@ def _strategy_description(strategy_id: StrategyId | None, candidate_strategies: 
     return str(details.get("description") or details.get("name") or strategy_id)
 
 
+def _strategy_label(strategy_id: StrategyId | None, candidate_strategies: dict[str, Any]) -> str:
+    if strategy_id is None:
+        return "unresolved"
+    details = candidate_strategies.get(strategy_id, {})
+    name = details.get("name") if isinstance(details, dict) else None
+    return f"Strategy {strategy_id} ({name})" if name else f"Strategy {strategy_id}"
+
+
 def _scorecard_top_vote(scorecard: Scorecard) -> StrategyId:
     ranked = sorted(scorecard.scores.items(), key=lambda item: (-item[1].overall, item[0]))
     return ranked[0][0]
@@ -119,12 +127,17 @@ def run_mcda_consensus(
             agent_top = _scorecard_top_vote(scorecard)
             if agent_top != recommended_strategy:
                 minority_concerns.append(
-                    f"{scorecard.agent} top-scored Strategy {agent_top} while consensus selected Strategy {recommended_strategy}."
+                    f"{scorecard.agent} top-scored {_strategy_label(agent_top, candidate_strategies)} "
+                    f"while consensus selected {_strategy_label(recommended_strategy, candidate_strategies)}."
                 )
 
     average_variance = _mean([item.stdev for item in aggregate.values()])
     confidence = max(0.4, min(0.95, round(0.55 + agreement_ratio * 0.35 - average_variance * 0.05, 4)))
-    summary_target = recommended_strategy or ", ".join(unresolved_strategies)
+    summary_target = (
+        _strategy_label(recommended_strategy, candidate_strategies)
+        if recommended_strategy
+        else ", ".join(_strategy_label(strategy, candidate_strategies) for strategy in unresolved_strategies)
+    )
     deliberation_summary = [
         f"Collected {len(scorecards)} MCDA scorecards.",
         f"Highest mean finalist(s): {summary_target}.",

@@ -112,7 +112,20 @@ def _make_blackboard_item(
     )
 
 
-def _round1_to_blackboard(agent_name: str, output: Round1Analysis, cycle_id: int) -> list[BlackboardItem]:
+def _strategy_label(candidate_strategies: dict[str, Any], strategy_id: str | None) -> str:
+    if not strategy_id:
+        return "unresolved"
+    details = candidate_strategies.get(strategy_id, {})
+    name = details.get("name") if isinstance(details, dict) else None
+    return f"Strategy {strategy_id} ({name})" if name else f"Strategy {strategy_id}"
+
+
+def _round1_to_blackboard(
+    agent_name: str,
+    output: Round1Analysis,
+    cycle_id: int,
+    candidate_strategies: dict[str, Any],
+) -> list[BlackboardItem]:
     items: list[BlackboardItem] = []
     if output.blackboard_items:
         for index, contribution in enumerate(output.blackboard_items, start=1):
@@ -161,7 +174,7 @@ def _round1_to_blackboard(agent_name: str, output: Round1Analysis, cycle_id: int
             cycle_id=cycle_id,
             author=agent_name,
             item_type="claim",
-            content=f"Initial recommendation is Strategy {output.initial_recommendation}.",
+            content=f"Initial recommendation is {_strategy_label(candidate_strategies, output.initial_recommendation)}.",
             index=999,
             confidence=output.confidence,
             topic_tags=["strategic_value"],
@@ -250,14 +263,22 @@ def _belief_update_to_blackboard(agent_name: str, output: Round3BeliefUpdate, cy
     return items
 
 
-def _scorecard_blackboard_item(agent_name: str, scorecard: Scorecard, cycle_id: int) -> BlackboardItem:
+def _scorecard_blackboard_item(
+    agent_name: str,
+    scorecard: Scorecard,
+    cycle_id: int,
+    candidate_strategies: dict[str, Any],
+) -> BlackboardItem:
     top_strategy, top_score = sorted(scorecard.scores.items(), key=lambda item: (-item[1].overall, item[0]))[0]
     return _make_blackboard_item(
         round_id=4,
         cycle_id=cycle_id,
         author=agent_name,
         item_type="scorecard",
-        content=f"{agent_name} top-scored Strategy {top_strategy} with overall score {top_score.overall}.",
+        content=(
+            f"{agent_name} top-scored {_strategy_label(candidate_strategies, top_strategy)} "
+            f"with overall score {top_score.overall}."
+        ),
         index=1,
         confidence=scorecard.confidence,
         topic_tags=["strategic_value"],
@@ -363,7 +384,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                     confidence=analysis.confidence,
                 )
             )
-            blackboard_items.extend(_round1_to_blackboard(agent.name, analysis, cycle_id))
+            blackboard_items.extend(_round1_to_blackboard(agent.name, analysis, cycle_id, state["candidate_strategies"]))
         return {
             "agent_outputs": outputs,
             "blackboard": blackboard_items,
@@ -537,7 +558,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                     confidence=scorecard.confidence,
                 )
             )
-            blackboard_items.append(_scorecard_blackboard_item(agent.name, scorecard, cycle_id))
+            blackboard_items.append(_scorecard_blackboard_item(agent.name, scorecard, cycle_id, state["candidate_strategies"]))
         return {"agent_outputs": outputs, "blackboard": blackboard_items, "scorecards": scorecards, "round_id": 4}
 
     def consensus_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -547,7 +568,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
             blackboard=state.get("blackboard", []),
         )
         content = (
-            f"Consensus selected Strategy {consensus.recommended_strategy}."
+            f"Consensus selected {_strategy_label(state['candidate_strategies'], consensus.recommended_strategy)}."
             if consensus.recommended_strategy
             else f"Consensus unresolved among {', '.join(consensus.unresolved_strategies)}."
         )

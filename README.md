@@ -30,7 +30,11 @@ ollama pull llama3.1:8b
 ollama serve
 ```
 
-Copy `.env.example` to `.env` and adjust settings if needed.
+Copy `.env.example` to `.env` and adjust settings if needed. Runtime config precedence is:
+
+```text
+CLI flags -> environment / .env -> config/model.yaml defaults
+```
 
 ## Run With Mock Provider
 
@@ -67,6 +71,29 @@ Both options apply to all three modes. Fault injection tests whether a mode catc
 ```bash
 python -m agentic_decision_benchmark.main run-all --provider ollama
 python -m agentic_decision_benchmark.main run-self-organizing --provider ollama
+```
+
+## Run With OpenAI
+
+Set an API key in `.env`:
+
+```env
+MODEL_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5.4-mini
+```
+
+Then run any benchmark mode with the OpenAI-backed provider:
+
+```bash
+python -m agentic_decision_benchmark.main run-all --provider openai
+python -m agentic_decision_benchmark.main run-self-organizing --provider openai
+```
+
+The OpenAI provider calls the Responses API and requests JSON-object output. `OPENAI_STORE=false` is the default for benchmark runs. Override `OPENAI_MODEL` or pass `--model` to compare another model:
+
+```bash
+python -m agentic_decision_benchmark.main run-all --provider openai --model gpt-5.5
 ```
 
 ## Tests
@@ -127,7 +154,7 @@ The private brief file is located at:
 data/private_role_briefs.yaml
 ```
 
-## Provider Migration
+## Provider Backends
 
 Graph logic depends only on the `LLMProvider` interface:
 
@@ -136,15 +163,15 @@ def generate(self, prompt: str, *, temperature: float, max_tokens: int) -> str:
     ...
 ```
 
-To add a paid provider later, implement a new provider class beside `OllamaProvider`, add it to `llm/factory.py`, and configure:
+Available providers are `mock`, `ollama`, and `openai`. Configure OpenAI with:
 
 ```env
 MODEL_PROVIDER=openai
-OPENAI_MODEL=gpt-4.1
 OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5.4-mini
 ```
 
-Agents, graphs, consensus, evaluator, and storage modules do not import Ollama-specific classes.
+Agents, graphs, consensus, evaluator, and storage modules do not import provider-specific classes.
 
 ## Self-Organization Design
 

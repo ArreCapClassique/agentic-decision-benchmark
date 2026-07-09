@@ -19,7 +19,7 @@ class MockProvider(BaseLLMProvider):
             "SUPERVISOR_PLAN": self._supervisor_plan,
             "ISOLATED_DOMAIN_ANALYSIS": lambda: self._domain_analysis(agent, prompt),
             "SUPERVISOR_SYNTHESIS": lambda: self._supervisor_synthesis(prompt),
-            "SELF_ORGANIZING_ROUND_1": lambda: self._round1(agent),
+            "SELF_ORGANIZING_ROUND_1": lambda: self._round1(agent, prompt),
             "SELF_ORGANIZING_ROUND_2": lambda: self._round2(agent, prompt),
             "SELF_ORGANIZING_ROUND_3": lambda: self._round3(agent, prompt),
             "SELF_ORGANIZING_ROUND_4": lambda: self._round4(agent),
@@ -47,23 +47,15 @@ class MockProvider(BaseLLMProvider):
 
     @staticmethod
     def _json_section(prompt: str, marker: str) -> dict[str, Any]:
-        if marker not in prompt:
+        marker_text = f"{marker}: "
+        if marker_text not in prompt:
             return {}
-        text = prompt.split(f"{marker}: ", 1)[1]
-        for next_marker in [
-            "\nSALIENCE_RANKED_ITEMS:",
-            "\nCONFLICT_HISTORY:",
-            "\nCURRENT_CONFLICT_MAP:",
-            "\nCRITIQUES_TARGETING_OWN_CLAIMS:",
-            "\nUNRESOLVED_HIGH_SEVERITY_CONFLICTS:",
-            "\nDETERMINISTIC_METRICS:",
-        ]:
-            if next_marker in text:
-                text = text.split(next_marker, 1)[0]
+        text = prompt.split(marker_text, 1)[1].lstrip()
         try:
-            return json.loads(text.strip())
+            payload, _ = json.JSONDecoder().raw_decode(text)
         except json.JSONDecodeError:
             return {}
+        return payload if isinstance(payload, dict) else {}
 
     @staticmethod
     def _trailing_json_section(prompt: str, marker: str) -> dict[str, Any]:
@@ -75,6 +67,36 @@ class MockProvider(BaseLLMProvider):
         except json.JSONDecodeError:
             return {}
         return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _candidate_strategies(prompt: str) -> dict[str, Any]:
+        context = MockProvider._json_section(prompt, "CONTEXT")
+        strategies = context.get("candidate_strategies", {})
+        return strategies if isinstance(strategies, dict) else {}
+
+    def _strategy_details(self, prompt: str, strategy_id: str) -> dict[str, Any]:
+        details = self._candidate_strategies(prompt).get(strategy_id, {})
+        return details if isinstance(details, dict) else {}
+
+    def _strategy_name(self, prompt: str, strategy_id: str) -> str:
+        details = self._strategy_details(prompt, strategy_id)
+        return str(details.get("name") or f"Strategy {strategy_id}")
+
+    def _strategy_label(self, prompt: str, strategy_id: str) -> str:
+        name = self._strategy_name(prompt, strategy_id)
+        fallback = f"Strategy {strategy_id}"
+        return f"{fallback} ({name})" if name != fallback else fallback
+
+    def _strategy_description(self, prompt: str, strategy_id: str) -> str:
+        details = self._strategy_details(prompt, strategy_id)
+        return str(details.get("description") or details.get("name") or f"Strategy {strategy_id}")
+
+    def _strategy_tradeoff(self, prompt: str, strategy_id: str) -> str:
+        details = self._strategy_details(prompt, strategy_id)
+        return str(details.get("core_tradeoff") or "Execution depends on disciplined milestones and evidence gates.")
+
+    def _strategy_claim(self, prompt: str) -> str:
+        return f"{self._strategy_label(prompt, 'C')} best matches the case: {self._strategy_description(prompt, 'C')}"
 
     @staticmethod
     def _score(value: float) -> float:
@@ -102,19 +124,22 @@ class MockProvider(BaseLLMProvider):
 
     def _generalist(self, prompt: str) -> dict[str, Any]:
         has_new_information = "extends the compliance deadline from 18 months to 24 months" in prompt
+        c_label = self._strategy_label(prompt, "C")
+        c_description = self._strategy_description(prompt, "C")
+        c_tradeoff = self._strategy_tradeoff(prompt, "C")
         reasoning = [
             "The OEM revenue exposure is too large to ignore.",
             "A full wind pivot creates execution and cash-flow risk.",
-            "A staged dual-track approach preserves optionality while reducing concentration risk.",
+            f"{c_label} is the best fit among the provided options: {c_description}",
         ]
         risks = [
-            "Coordination complexity across AI compliance and wind retooling.",
-            "Cash constraints if both tracks accelerate at the same time.",
+            f"Core tradeoff for {c_label}: {c_tradeoff}",
+            "Cash constraints remain material if milestones expand faster than the capital envelope.",
             "Supplier and workforce readiness may become bottlenecks.",
         ]
         assumptions = [
-            "EuroTech can sequence investment with clear gates.",
-            "The wind partner accepts a pilot before full retooling.",
+            f"EuroTech can execute {c_label} with clear decision gates.",
+            "External counterparties accept the staged evidence and negotiation path described in the chosen strategy.",
         ]
         if has_new_information:
             reasoning.append(
@@ -124,7 +149,7 @@ class MockProvider(BaseLLMProvider):
             assumptions.append("The OEM's 24 months deadline extension is firm enough to use for planning gates.")
         return {
             "recommended_strategy": "C",
-            "recommendation": "Adopt a dual-track staged strategy: protect the OEM relationship through phased AI quality compliance while piloting the wind partnership with gated investment.",
+            "recommendation": f"Adopt {c_label}: {c_description}",
             "reasoning": reasoning,
             "risks": risks,
             "assumptions": assumptions,
@@ -158,14 +183,16 @@ class MockProvider(BaseLLMProvider):
 
     def _domain_analysis(self, agent: str, prompt: str) -> dict[str, Any]:
         domain = self._agent_domain(agent)
+        c_label = self._strategy_label(prompt, "C")
+        c_description = self._strategy_description(prompt, "C")
         recommendation = "C"
         if agent == "Technology Agent":
             recommendation = "A"
         if agent == "Strategy Agent":
             recommendation = "C"
         claims = [
-            f"From the {domain} perspective, Strategy C keeps the most decision flexibility.",
-            "A phased approach can protect the OEM path while testing wind-market readiness.",
+            f"From the {domain} perspective, {c_label} keeps the most decision flexibility.",
+            f"Its stated action plan is: {c_description}",
         ]
         if "Full AI-enabled predictive quality management can be deployed across all plants in 3 months" in prompt:
             claims.append(
@@ -190,32 +217,35 @@ class MockProvider(BaseLLMProvider):
 
     def _supervisor_synthesis(self, prompt: str) -> dict[str, Any]:
         has_new_information = "extends the compliance deadline from 18 months to 24 months" in prompt
+        c_label = self._strategy_label(prompt, "C")
+        c_description = self._strategy_description(prompt, "C")
+        c_tradeoff = self._strategy_tradeoff(prompt, "C")
         synthesis = [
             "Finance and operations favor staged investment over a large irreversible pivot.",
             "Technology and compliance require auditability, data readiness, and model monitoring.",
-            "Strategy benefits from diversification without abandoning the at-risk OEM relationship.",
+            f"{c_label} fits the provided option set: {c_description}",
         ]
         tradeoffs = [
-            "Strategy C is harder to coordinate than A or D.",
+            f"Core tradeoff for {c_label}: {c_tradeoff}",
             "It delays full wind commitment compared with B.",
         ]
         risks = [
-            "Dual execution overload.",
+            "Sequencing and governance overload.",
             "Insufficient AI data readiness.",
             "Hiring bottlenecks for quality analytics and wind production skills.",
         ]
         assumptions = [
-            "The OEM accepts phased evidence of predictive quality management.",
-            "The wind partner accepts a pilot-gated ramp.",
+            "The OEM accepts phased evidence of predictive quality management or a negotiated conditional path.",
+            "The wind partner accepts the timing implied by the selected strategy.",
         ]
         if has_new_information:
             synthesis.append("The 24-month compliance deadline gives the supervisor more room to phase OEM evidence without abandoning urgency.")
-            tradeoffs.append("The deadline extension improves feasibility of Strategy C but reduces the case for an all-out Strategy A sprint.")
+            tradeoffs.append(f"The deadline extension improves feasibility of {c_label} but reduces the case for an all-out Strategy A sprint.")
             risks.append("A longer deadline can still be missed if foundational data and auditability milestones slip.")
             assumptions.append("The OEM's 24 months deadline extension applies to the same predictive quality requirement.")
         return {
             "recommended_strategy": "C",
-            "recommendation": "Choose Strategy C with explicit gates: urgent OEM AI compliance foundation, bounded wind pilot, and staged release of CAPEX and hiring.",
+            "recommendation": f"Choose {c_label} with explicit gates: {c_description}",
             "synthesis": synthesis,
             "tradeoffs": tradeoffs,
             "risks": risks,
@@ -223,8 +253,9 @@ class MockProvider(BaseLLMProvider):
             "confidence": 0.78,
         }
 
-    def _round1(self, agent: str) -> dict[str, Any]:
+    def _round1(self, agent: str, prompt: str) -> dict[str, Any]:
         domain = self._agent_domain(agent)
+        c_claim = self._strategy_claim(prompt)
         recommendation = "C"
         if agent == "Technology Agent":
             recommendation = "A"
@@ -241,7 +272,7 @@ class MockProvider(BaseLLMProvider):
             },
             {
                 "item_type": "claim",
-                "content": "Strategy C provides the best balance of near-term OEM protection and diversification learning.",
+                "content": c_claim,
                 "topic_tags": ["strategic_value", "diversification"],
                 "related_strategy": "C",
                 "criterion": "strategic_value",
@@ -289,7 +320,7 @@ class MockProvider(BaseLLMProvider):
         return {
             "claims": [
                 f"{agent} sees {domain} as a binding constraint on any strategy.",
-                "Strategy C provides the best balance of near-term OEM protection and diversification learning.",
+                c_claim,
             ],
             "risks": [
                 f"{agent} flags that Strategy B may overextend the organization.",
@@ -367,11 +398,12 @@ class MockProvider(BaseLLMProvider):
                 ],
             }
         target = "Strategy Agent" if agent != "Strategy Agent" else "Finance Agent"
+        strategy_claim = self._strategy_claim(prompt)
         strategy_target = self._find_blackboard_item(
             prompt,
             author=target,
             item_type="claim",
-            content_contains="Strategy C provides the best balance",
+            content_contains=strategy_claim,
         )
         return {
             "agent_name": agent,
@@ -380,10 +412,10 @@ class MockProvider(BaseLLMProvider):
                 {
                     "target_item_id": strategy_target.get("id"),
                     "target_agent": target,
-                    "target_claim": "Strategy C provides the best balance of near-term OEM protection and diversification learning.",
-                    "critique": f"{agent} says this balance is plausible but needs explicit sequencing and decision gates.",
-                    "missing_assumption": "The claim assumes management capacity for dual execution.",
-                    "risk_introduced": "Without sequencing, the dual-track option may dilute focus.",
+                    "target_claim": strategy_target.get("content") or strategy_claim,
+                    "critique": f"{agent} says this option is plausible but needs explicit sequencing and decision gates.",
+                    "missing_assumption": "The claim assumes management capacity for disciplined staged execution.",
+                    "risk_introduced": "Without sequencing, the selected option may dilute focus.",
                     "topic_tags": ["strategic_value", "implementation_timeline"],
                     "severity": 3,
                     "confidence": 0.74,
@@ -394,9 +426,10 @@ class MockProvider(BaseLLMProvider):
         }
 
     def _round3(self, agent: str, prompt: str) -> dict[str, Any]:
-        changed = ["Strategy C remains preferred if investment gates and sequencing are explicit."]
-        accepted = ["Accepted critique that dual-track execution needs governance and milestones."]
-        concerns = ["Remaining concern: cash and management bandwidth may constrain parallel execution."]
+        c_label = self._strategy_label(prompt, "C")
+        changed = [f"{c_label} remains preferred if investment gates and sequencing are explicit."]
+        accepted = ["Accepted critique that execution needs governance and milestones."]
+        concerns = ["Remaining concern: cash and management bandwidth may constrain sequencing."]
         if "3 months with minimal cost and minimal integration risk" in prompt:
             accepted.append("Accepted critiques rejecting the unsupported 3-month plant-wide AI deployment claim.")
             changed.append("AI quality deployment should be staged rather than assumed complete in 3 months.")

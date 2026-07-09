@@ -39,6 +39,11 @@ class BenchmarkSettings(BaseModel):
     provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-5.4-mini"
+    openai_api_key: str | None = None
+    openai_timeout: float = 120.0
+    openai_store: bool = False
     temperature: float = 0.2
     max_tokens: int = 1200
     run_output_dir: Path = Field(default_factory=lambda: PROJECT_ROOT / "runs")
@@ -55,6 +60,25 @@ def load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Expected mapping in {path}")
     return data
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _bool_from_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _bool_value(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return default
 
 
 def load_text(path: Path) -> str:
@@ -125,20 +149,56 @@ def load_settings(
 ) -> BenchmarkSettings:
     load_dotenv(PROJECT_ROOT / ".env")
     benchmark = load_yaml(PROJECT_ROOT / "config" / "benchmark.yaml")
-    configured_provider = provider or os.getenv("MODEL_PROVIDER") or "ollama"
-    configured_model = model or os.getenv("OLLAMA_MODEL") or "llama3.1:8b"
+    model_config = load_yaml(PROJECT_ROOT / "config" / "model.yaml")
+    ollama_config = _mapping(model_config.get("ollama"))
+    openai_config = _mapping(model_config.get("openai"))
+
+    configured_provider = str(
+        provider or os.getenv("MODEL_PROVIDER") or model_config.get("provider") or "ollama"
+    ).lower()
+    configured_ollama_model = str(
+        os.getenv("OLLAMA_MODEL") or ollama_config.get("model") or "llama3.1:8b"
+    )
+    configured_openai_model = str(
+        os.getenv("OPENAI_MODEL") or openai_config.get("model") or "gpt-5.4-mini"
+    )
+    if model is not None:
+        if configured_provider == "openai":
+            configured_openai_model = model
+        if configured_provider == "ollama":
+            configured_ollama_model = model
+
     configured_temperature = temperature
     if configured_temperature is None:
-        configured_temperature = float(os.getenv("TEMPERATURE", "0.2"))
+        configured_temperature = float(
+            os.getenv("TEMPERATURE") or model_config.get("temperature") or "0.2"
+        )
     configured_max_tokens = max_tokens
     if configured_max_tokens is None:
-        configured_max_tokens = int(os.getenv("MAX_TOKENS", "1200"))
+        configured_max_tokens = int(
+            os.getenv("MAX_TOKENS") or model_config.get("max_tokens") or "1200"
+        )
     configured_output_dir = output_dir or os.getenv("RUN_OUTPUT_DIR") or "runs"
+    configured_openai_store = _bool_from_env(
+        "OPENAI_STORE",
+        _bool_value(openai_config.get("store"), False),
+    )
 
     return BenchmarkSettings(
         provider=configured_provider,
-        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-        ollama_model=configured_model,
+        ollama_base_url=str(
+            os.getenv("OLLAMA_BASE_URL") or ollama_config.get("base_url") or "http://localhost:11434"
+        ),
+        ollama_model=configured_ollama_model,
+        openai_base_url=str(
+            os.getenv("OPENAI_BASE_URL") or openai_config.get("base_url") or "https://api.openai.com/v1"
+        ),
+        openai_model=configured_openai_model,
+        openai_api_key=os.getenv("OPENAI_API_KEY") or None,
+        openai_timeout=float(
+            os.getenv("OPENAI_TIMEOUT") or openai_config.get("timeout") or "120.0"
+        ),
+        openai_store=configured_openai_store,
         temperature=configured_temperature,
         max_tokens=configured_max_tokens,
         run_output_dir=(PROJECT_ROOT / configured_output_dir).resolve()

@@ -95,7 +95,7 @@ def _add_common_options(parser: argparse.ArgumentParser, mode: str | None = None
     parser.set_defaults(func=run_command)
     if mode is not None:
         parser.set_defaults(mode=mode)
-    parser.add_argument("--provider", choices=["mock", "ollama"], default=None)
+    parser.add_argument("--provider", choices=["mock", "ollama", "openai"], default=None)
     parser.add_argument("--model", default=None, help="Override the configured model name.")
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)

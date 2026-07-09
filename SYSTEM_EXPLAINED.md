@@ -39,10 +39,10 @@ The system gives every decision-making setup the same four possible strategies.
 | --- | --- | --- |
 | A | OEM-first AI compliance | Focus mainly on satisfying the automotive customer quickly. |
 | B | Wind pivot | Shift aggressively toward the wind turbine opportunity. |
-| C | Dual-track staged strategy | Do both in a controlled, phased way: protect the automotive customer while piloting the wind opportunity. |
+| C | Sequential real-options strategy | Start with a limited OEM AI pilot, negotiate conditional OEM acceptance, and defer full wind commitment until decision gates are met. |
 | D | Defensive minimal investment | Spend as little as possible and wait for more certainty. |
 
-In the included mock runs and tests, the system usually selects Strategy C, the staged dual-track approach.
+In the included mock runs and tests, the system usually selects Strategy C, the sequential real-options approach.
 
 ## What The Project Is Testing
 

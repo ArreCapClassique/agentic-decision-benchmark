@@ -9,6 +9,8 @@ from agentic_decision_benchmark.utils.json_utils import to_jsonable
 
 STRICT_JSON_RULES = (
     "Output valid JSON only. Do not include Markdown. Do not include explanations outside JSON. "
+    "When a return field expects a list, output a JSON array of strings or objects, not a single string. "
+    "For recommended_strategy, initial_recommendation, and updated_recommendation, output exactly one strategy ID: A, B, C, or D. "
     "Stay within the assigned role. Use only the provided scenario, candidate strategies, private brief or consolidated private pack when present, visible blackboard data, fault context, and new information. "
     "Calibrate confidence between 0 and 1. Avoid inventing facts not present in the scenario."
 )

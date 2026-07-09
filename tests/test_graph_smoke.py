@@ -86,6 +86,9 @@ def test_self_organizing_graph_runs_with_blackboard_scorecards_and_consensus(tmp
     assert any(item.item_type == "critique" for item in state["blackboard"])
     assert any(item.item_type == "new_information" for item in state["blackboard"])
     assert any(item.item_type == "scorecard" for item in state["blackboard"])
+    blackboard_text = "\n".join(item.content for item in state["blackboard"])
+    assert "Strategy C (Sequential real-options strategy)" in blackboard_text
+    assert "dual-track" not in blackboard_text.lower()
     assert state["metadata"]["information_setting"] == "equal_total"
     assert state["metadata"]["private_role_briefs_enabled"] is True
 

@@ -42,7 +42,7 @@ def test_evaluator_returns_required_fields_in_range(tmp_path) -> None:
     evaluator = Evaluator(MockProvider(), temperature=settings.temperature, max_tokens=settings.max_tokens)
     result = evaluator.evaluate(
         {
-            "final_recommendation": {"recommended_strategy": "C", "recommendation": "Use staged dual track."},
+            "final_recommendation": {"recommended_strategy": "C", "recommendation": "Use sequential real options."},
             "blackboard": [],
             "scorecards": [],
             "agent_outputs": [],
@@ -109,7 +109,7 @@ def test_evaluator_overrides_llm_overall_with_weighted_decimal(tmp_path) -> None
 
     result = evaluator.evaluate(
         {
-            "final_recommendation": {"recommended_strategy": "C", "recommendation": "Use staged dual track."},
+            "final_recommendation": {"recommended_strategy": "C", "recommendation": "Use sequential real options."},
             "blackboard": [],
             "scorecards": [],
             "agent_outputs": [],
