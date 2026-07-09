@@ -317,7 +317,7 @@ def write_comparative_report(run_dir: Path, states: dict[str, dict[str, Any]]) -
         "Fault correction is measured by whether unsupported or overconfident injected claims are challenged in critiques or belief updates.",
         "",
         "## Adaptability Analysis",
-        "When new information is enabled, the `self_organizing` mode injects it once during the first critique/update cycle and incorporates it during belief update without restarting the run.",
+        "When new information is enabled, all modes receive the same update through their architecture-specific decision point: `single` in the generalist prompt, `supervisor` during final synthesis, and `self_organizing` as a blackboard item before belief update.",
         "",
         "## Strengths And Weaknesses",
         "- `single` is efficient but has limited peer challenge.",

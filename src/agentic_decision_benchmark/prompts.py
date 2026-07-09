@@ -9,7 +9,7 @@ from agentic_decision_benchmark.utils.json_utils import to_jsonable
 
 STRICT_JSON_RULES = (
     "Output valid JSON only. Do not include Markdown. Do not include explanations outside JSON. "
-    "Stay within the assigned role. Use only the provided scenario, candidate strategies, private brief or consolidated private pack when present, and visible blackboard data. "
+    "Stay within the assigned role. Use only the provided scenario, candidate strategies, private brief or consolidated private pack when present, visible blackboard data, fault context, and new information. "
     "Calibrate confidence between 0 and 1. Avoid inventing facts not present in the scenario."
 )
 
@@ -31,6 +31,7 @@ def build_generalist_prompt(
     *,
     consolidated_private_brief_pack: str | None = None,
     faulty_claim: str | None = None,
+    new_information: str | None = None,
 ) -> str:
     return "\n".join(
         [
@@ -43,6 +44,9 @@ def build_generalist_prompt(
             "The following synthetic information combines all role-specific private briefs. Use it as the full information pack available to the generalist baseline.",
             consolidated_private_brief_pack or "None",
             f"FAULT_CONTEXT: {faulty_claim or 'None'}",
+            "NEW_INFORMATION",
+            "Late-arriving information visible to this mode. If present, update reasoning, risks, assumptions, or confidence to reflect it.",
+            new_information or "None",
         ]
     )
 
@@ -92,6 +96,8 @@ def build_supervisor_synthesis_prompt(
     scenario: str,
     candidate_strategies: dict[str, Any],
     isolated_outputs: list[dict[str, Any]],
+    *,
+    new_information: str | None = None,
 ) -> str:
     return "\n".join(
         [
@@ -101,6 +107,9 @@ def build_supervisor_synthesis_prompt(
             "Return schema keys: recommended_strategy, recommendation, synthesis, tradeoffs, risks, assumptions, confidence.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             f"ISOLATED_OUTPUTS: {_payload({'outputs': isolated_outputs})}",
+            "NEW_INFORMATION",
+            "Late-arriving information visible to the supervisor during final synthesis. If present, update the synthesis without rerunning isolated expert work.",
+            new_information or "None",
         ]
     )
 

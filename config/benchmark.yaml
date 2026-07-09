@@ -17,5 +17,7 @@ self_organizing_rounds:
   - convergence_check
   - mcda_scorecard
 max_deliberation_cycles: 2
+fault_injection_enabled: false
+new_info_injection_enabled: false
 faulty_claim: "Full AI-enabled predictive quality management can be deployed across all plants in 3 months with minimal cost and minimal integration risk."
 new_information: "The automotive OEM extends the compliance deadline from 18 months to 24 months."

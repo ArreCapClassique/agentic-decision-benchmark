@@ -6,6 +6,7 @@ from agentic_decision_benchmark.prompts import (
     build_generalist_prompt,
     build_self_round1_prompt,
     build_self_round2_prompt,
+    build_supervisor_synthesis_prompt,
 )
 from agentic_decision_benchmark.schemas import AgentDefinition, BlackboardItem
 from agentic_decision_benchmark.settings import (
@@ -44,6 +45,18 @@ def test_single_prompt_contains_all_private_role_sections() -> None:
         assert item_id in prompt
 
 
+def test_single_prompt_can_receive_new_information() -> None:
+    prompt = build_generalist_prompt(
+        load_scenario(),
+        load_candidate_strategies(),
+        consolidated_private_brief_pack="brief pack",
+        new_information="The automotive OEM extends the compliance deadline from 18 months to 24 months.",
+    )
+
+    assert "NEW_INFORMATION" in prompt
+    assert "24 months" in prompt
+
+
 def test_supervisor_finance_prompt_contains_only_finance_private_brief() -> None:
     finance = _agent("Finance Agent")
     prompt = build_domain_analysis_prompt(
@@ -56,6 +69,18 @@ def test_supervisor_finance_prompt_contains_only_finance_private_brief() -> None
     assert "FIN-002" in prompt
     for excluded_id in ["OPS-001", "HR-001", "LEG-001", "STR-001", "TECH-001"]:
         assert excluded_id not in prompt
+
+
+def test_supervisor_synthesis_prompt_can_receive_new_information() -> None:
+    prompt = build_supervisor_synthesis_prompt(
+        load_scenario(),
+        load_candidate_strategies(),
+        [{"agent": "Finance Agent", "output": {"recommendation": "C"}}],
+        new_information="The automotive OEM extends the compliance deadline from 18 months to 24 months.",
+    )
+
+    assert "NEW_INFORMATION" in prompt
+    assert "24 months" in prompt
 
 
 def test_self_round1_technology_prompt_contains_only_technology_private_brief() -> None:

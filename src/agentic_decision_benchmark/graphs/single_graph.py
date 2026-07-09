@@ -22,11 +22,13 @@ def build_single_graph(provider: LLMProvider, settings: BenchmarkSettings):
 
     def generalist_agent_node(state: dict[str, Any]) -> dict[str, Any]:
         faulty_claim = settings.faulty_claim if state.get("fault_injection") else None
+        new_information = settings.new_information if state.get("new_info_injection") else None
         prompt = build_generalist_prompt(
             state["scenario"],
             state["candidate_strategies"],
             consolidated_private_brief_pack=consolidated_private_brief_pack,
             faulty_claim=faulty_claim,
+            new_information=new_information,
         )
         recommendation = provider_json(
             provider,
@@ -49,6 +51,7 @@ def build_single_graph(provider: LLMProvider, settings: BenchmarkSettings):
             "round_id": 1,
             "agent_outputs": [output],
             "final_recommendation": recommendation.model_dump(mode="json"),
+            "new_information_injected": bool(new_information),
         }
 
     graph = StateGraph(BenchmarkState)

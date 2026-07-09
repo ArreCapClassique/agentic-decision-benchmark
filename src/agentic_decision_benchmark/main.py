@@ -68,6 +68,8 @@ def run_command(args: argparse.Namespace) -> int:
     scenario = load_scenario()
     candidate_strategies = load_candidate_strategies()
     modes = list(MODE_NAMES) if args.command == "run-all" else [args.mode]
+    fault_injection = settings.fault_injection_enabled if args.fault_injection is None else args.fault_injection
+    new_info = settings.new_info_injection_enabled if args.new_info is None else args.new_info
     store = RunStore(settings.run_output_dir)
     store.save_private_role_briefs(load_private_role_briefs())
     states: dict[str, dict[str, Any]] = {}
@@ -78,8 +80,8 @@ def run_command(args: argparse.Namespace) -> int:
             settings=settings,
             scenario=scenario,
             candidate_strategies=candidate_strategies,
-            fault_injection=args.fault_injection,
-            new_info=args.new_info,
+            fault_injection=fault_injection,
+            new_info=new_info,
         )
         states[mode] = state
         store.save_mode(mode, state)
@@ -98,8 +100,18 @@ def _add_common_options(parser: argparse.ArgumentParser, mode: str | None = None
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--output-dir", default=None)
-    parser.add_argument("--fault-injection", action="store_true")
-    parser.add_argument("--new-info", action="store_true")
+    parser.add_argument(
+        "--fault-injection",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Override the configured faulty-claim resilience stress test switch.",
+    )
+    parser.add_argument(
+        "--new-info",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Override the configured new-information adaptability stress test switch.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

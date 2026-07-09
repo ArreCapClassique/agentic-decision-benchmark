@@ -15,10 +15,10 @@ class MockProvider(BaseLLMProvider):
         task = self._marker(prompt, "TASK")
         agent = self._marker(prompt, "AGENT_NAME")
         handlers = {
-            "GENERALIST_RECOMMENDATION": self._generalist,
+            "GENERALIST_RECOMMENDATION": lambda: self._generalist(prompt),
             "SUPERVISOR_PLAN": self._supervisor_plan,
             "ISOLATED_DOMAIN_ANALYSIS": lambda: self._domain_analysis(agent, prompt),
-            "SUPERVISOR_SYNTHESIS": self._supervisor_synthesis,
+            "SUPERVISOR_SYNTHESIS": lambda: self._supervisor_synthesis(prompt),
             "SELF_ORGANIZING_ROUND_1": lambda: self._round1(agent),
             "SELF_ORGANIZING_ROUND_2": lambda: self._round2(agent, prompt),
             "SELF_ORGANIZING_ROUND_3": lambda: self._round3(agent, prompt),
@@ -100,24 +100,34 @@ class MockProvider(BaseLLMProvider):
             return item
         return {}
 
-    def _generalist(self) -> dict[str, Any]:
+    def _generalist(self, prompt: str) -> dict[str, Any]:
+        has_new_information = "extends the compliance deadline from 18 months to 24 months" in prompt
+        reasoning = [
+            "The OEM revenue exposure is too large to ignore.",
+            "A full wind pivot creates execution and cash-flow risk.",
+            "A staged dual-track approach preserves optionality while reducing concentration risk.",
+        ]
+        risks = [
+            "Coordination complexity across AI compliance and wind retooling.",
+            "Cash constraints if both tracks accelerate at the same time.",
+            "Supplier and workforce readiness may become bottlenecks.",
+        ]
+        assumptions = [
+            "EuroTech can sequence investment with clear gates.",
+            "The wind partner accepts a pilot before full retooling.",
+        ]
+        if has_new_information:
+            reasoning.append(
+                "The 24-month compliance deadline improves feasibility of phased OEM AI compliance, but data-readiness work should still start immediately."
+            )
+            risks.append("The extra deadline relief could create complacency if EuroTech delays sensor, data, and auditability work.")
+            assumptions.append("The OEM's 24 months deadline extension is firm enough to use for planning gates.")
         return {
             "recommended_strategy": "C",
             "recommendation": "Adopt a dual-track staged strategy: protect the OEM relationship through phased AI quality compliance while piloting the wind partnership with gated investment.",
-            "reasoning": [
-                "The OEM revenue exposure is too large to ignore.",
-                "A full wind pivot creates execution and cash-flow risk.",
-                "A staged dual-track approach preserves optionality while reducing concentration risk.",
-            ],
-            "risks": [
-                "Coordination complexity across AI compliance and wind retooling.",
-                "Cash constraints if both tracks accelerate at the same time.",
-                "Supplier and workforce readiness may become bottlenecks.",
-            ],
-            "assumptions": [
-                "EuroTech can sequence investment with clear gates.",
-                "The wind partner accepts a pilot before full retooling.",
-            ],
+            "reasoning": reasoning,
+            "risks": risks,
+            "assumptions": assumptions,
             "confidence": 0.72,
         }
 
@@ -178,28 +188,38 @@ class MockProvider(BaseLLMProvider):
             "confidence": 0.7,
         }
 
-    def _supervisor_synthesis(self) -> dict[str, Any]:
+    def _supervisor_synthesis(self, prompt: str) -> dict[str, Any]:
+        has_new_information = "extends the compliance deadline from 18 months to 24 months" in prompt
+        synthesis = [
+            "Finance and operations favor staged investment over a large irreversible pivot.",
+            "Technology and compliance require auditability, data readiness, and model monitoring.",
+            "Strategy benefits from diversification without abandoning the at-risk OEM relationship.",
+        ]
+        tradeoffs = [
+            "Strategy C is harder to coordinate than A or D.",
+            "It delays full wind commitment compared with B.",
+        ]
+        risks = [
+            "Dual execution overload.",
+            "Insufficient AI data readiness.",
+            "Hiring bottlenecks for quality analytics and wind production skills.",
+        ]
+        assumptions = [
+            "The OEM accepts phased evidence of predictive quality management.",
+            "The wind partner accepts a pilot-gated ramp.",
+        ]
+        if has_new_information:
+            synthesis.append("The 24-month compliance deadline gives the supervisor more room to phase OEM evidence without abandoning urgency.")
+            tradeoffs.append("The deadline extension improves feasibility of Strategy C but reduces the case for an all-out Strategy A sprint.")
+            risks.append("A longer deadline can still be missed if foundational data and auditability milestones slip.")
+            assumptions.append("The OEM's 24 months deadline extension applies to the same predictive quality requirement.")
         return {
             "recommended_strategy": "C",
             "recommendation": "Choose Strategy C with explicit gates: urgent OEM AI compliance foundation, bounded wind pilot, and staged release of CAPEX and hiring.",
-            "synthesis": [
-                "Finance and operations favor staged investment over a large irreversible pivot.",
-                "Technology and compliance require auditability, data readiness, and model monitoring.",
-                "Strategy benefits from diversification without abandoning the at-risk OEM relationship.",
-            ],
-            "tradeoffs": [
-                "Strategy C is harder to coordinate than A or D.",
-                "It delays full wind commitment compared with B.",
-            ],
-            "risks": [
-                "Dual execution overload.",
-                "Insufficient AI data readiness.",
-                "Hiring bottlenecks for quality analytics and wind production skills.",
-            ],
-            "assumptions": [
-                "The OEM accepts phased evidence of predictive quality management.",
-                "The wind partner accepts a pilot-gated ramp.",
-            ],
+            "synthesis": synthesis,
+            "tradeoffs": tradeoffs,
+            "risks": risks,
+            "assumptions": assumptions,
             "confidence": 0.78,
         }
 

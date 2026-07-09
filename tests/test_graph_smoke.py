@@ -33,6 +33,16 @@ def test_single_graph_compiles_and_runs_with_mock_provider(tmp_path) -> None:
     assert state["metadata"]["private_role_briefs_enabled"] is True
 
 
+def test_single_graph_can_apply_new_information(tmp_path) -> None:
+    graph = build_single_graph(MockProvider(), _settings(tmp_path))
+    state = graph.invoke(_initial("single", new_info=True))
+
+    final_text = str(state["final_recommendation"])
+    assert state["new_information_injected"] is True
+    assert "24-month" in final_text or "24 months" in final_text
+    assert state["evaluation"]["adaptability"] > 4.0
+
+
 def test_supervisor_graph_compiles_and_runs_with_mock_provider(tmp_path) -> None:
     graph = build_supervisor_graph(MockProvider(), _settings(tmp_path))
     state = graph.invoke(_initial("supervisor"))
@@ -42,6 +52,16 @@ def test_supervisor_graph_compiles_and_runs_with_mock_provider(tmp_path) -> None
     assert len([item for item in state["agent_outputs"] if item.phase == "isolated_domain_analysis"]) == 6
     assert state["metadata"]["information_setting"] == "equal_total"
     assert state["metadata"]["private_role_briefs_enabled"] is True
+
+
+def test_supervisor_graph_can_apply_new_information(tmp_path) -> None:
+    graph = build_supervisor_graph(MockProvider(), _settings(tmp_path))
+    state = graph.invoke(_initial("supervisor", new_info=True))
+
+    final_text = str(state["final_recommendation"])
+    assert state["new_information_injected"] is True
+    assert "24-month" in final_text or "24 months" in final_text
+    assert state["evaluation"]["adaptability"] > 4.0
 
 
 def test_self_organizing_graph_runs_with_blackboard_scorecards_and_consensus(tmp_path) -> None:

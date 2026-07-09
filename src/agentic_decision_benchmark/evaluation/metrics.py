@@ -52,14 +52,21 @@ def compute_metrics(state: dict[str, Any], provider: LLMProvider, runtime_second
         final_strategy = final_recommendation.get("recommended_strategy")
 
     state_text = _flatten_text(to_jsonable(state)).lower()
+    decision_artifact_text = _flatten_text(
+        {
+            "final_recommendation": final_recommendation,
+            "agent_outputs": [to_jsonable(item) for item in state.get("agent_outputs", [])],
+        }
+    ).lower()
     faulty_present = "3 months with minimal cost and minimal integration risk" in state_text
     fault_corrected = faulty_present and any(
         word in state_text for word in ["reject", "rejected", "overconfident", "unsupported", "underestimating"]
     )
     new_info_incorporated = bool(
         state.get("new_info_injection")
-        and ("24-month" in state_text or "24 months" in state_text)
-        and any(word in state_text for word in ["belief", "feasibility", "deadline", "phased"])
+        and state.get("new_information_injected")
+        and ("24-month" in decision_artifact_text or "24 months" in decision_artifact_text)
+        and any(word in decision_artifact_text for word in ["belief", "feasibility", "deadline", "phased"])
     )
     conflict_type_counts = {
         conflict_type: sum(1 for item in conflict_map if item.get("conflict_type") == conflict_type)

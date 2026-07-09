@@ -48,7 +48,19 @@ Optional resilience/adaptability flags:
 ```bash
 python -m agentic_decision_benchmark.main run-all --provider mock --fault-injection
 python -m agentic_decision_benchmark.main run-all --provider mock --new-info
+python -m agentic_decision_benchmark.main run-all --provider mock --fault-injection --new-info
 ```
+
+Both stress tests are off by default in `config/benchmark.yaml`:
+
+```yaml
+fault_injection_enabled: false
+new_info_injection_enabled: false
+```
+
+The CLI flags override those config defaults for a single run. Use `--fault-injection` / `--new-info` to turn them on, or `--no-fault-injection` / `--no-new-info` to force them off.
+
+Both options apply to all three modes. Fault injection tests whether a mode catches an unsupported AI-rollout claim. New information tests whether a mode incorporates the updated 24-month OEM deadline at its architecture-specific decision point.
 
 ## Run With Ollama
 

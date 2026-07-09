@@ -87,7 +87,7 @@ This is the simplest mode.
 
 One generalist AI assistant reads the case and the four strategy options. It then produces a final recommendation, reasoning, risks, assumptions, and confidence.
 
-In the implementation, this mode is defined in `src/agentic_decision_benchmark/graphs/single_graph.py`. The generalist prompt receives the public scenario, the four strategies, the consolidated private brief pack, and the optional faulty claim when fault injection is enabled. The graph then runs the same evaluator node used by the other modes.
+In the implementation, this mode is defined in `src/agentic_decision_benchmark/graphs/single_graph.py`. The generalist prompt receives the public scenario, the four strategies, the consolidated private brief pack, the optional faulty claim when fault injection is enabled, and the optional new-information update when adaptability testing is enabled. The graph then runs the same evaluator node used by the other modes.
 
 Plain-language analogy: one consultant writes a recommendation alone.
 
@@ -118,7 +118,7 @@ The six specialist roles are:
 - Strategy
 - Technology
 
-In the implementation, this mode is defined in `src/agentic_decision_benchmark/graphs/supervisor_graph.py`. The flow is supervisor plan, six isolated domain analyses, supervisor synthesis, then evaluator scoring. The domain agents do not see each other's private briefs or outputs directly, and they do not critique each other in this mode.
+In the implementation, this mode is defined in `src/agentic_decision_benchmark/graphs/supervisor_graph.py`. The flow is supervisor plan, six isolated domain analyses, supervisor synthesis, then evaluator scoring. The domain agents do not see each other's private briefs or outputs directly, and they do not critique each other in this mode. When new-information testing is enabled, the supervisor receives the update during final synthesis rather than rerunning the isolated expert calls.
 
 Plain-language analogy: a project lead asks six department experts for input, then writes the final decision.
 
@@ -273,6 +273,15 @@ This means the final self-organizing result is not decided by a hidden AI judge.
 
 The project includes two optional stress tests.
 
+Both are switchable in `config/benchmark.yaml`:
+
+```yaml
+fault_injection_enabled: false
+new_info_injection_enabled: false
+```
+
+The CLI can override those defaults for a single run with `--fault-injection`, `--no-fault-injection`, `--new-info`, and `--no-new-info`.
+
 ### Fault Injection
 
 Fault injection gives the system an intentionally overconfident or unsupported claim:
@@ -295,7 +304,7 @@ The goal is to see whether the agents can incorporate the new timing information
 
 This tests adaptability.
 
-Implementation detail: the `self_organizing` graph injects this as a `new_information` blackboard item once during the first critique/update cycle. The belief-update prompt tells agents to update from previous blackboard content and the current conflict map without restarting.
+Implementation detail: this option is switchable for all three modes. In `single`, the update is included in the generalist prompt. In `supervisor`, the update is provided during final synthesis after isolated expert work. In `self_organizing`, the graph injects it as a `new_information` blackboard item once during the first critique/update cycle, before conflict mapping and belief update. The belief-update prompt tells agents to update from previous blackboard content and the current conflict map without restarting.
 
 ## The AI Model Providers
 
@@ -479,7 +488,9 @@ Common options include:
 --max-tokens 1200
 --output-dir runs
 --fault-injection
+--no-fault-injection
 --new-info
+--no-new-info
 ```
 
 ## The Role Of LangGraph

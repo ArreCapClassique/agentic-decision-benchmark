@@ -86,10 +86,12 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
             if getattr(output, "phase", None) == "isolated_domain_analysis"
             or (isinstance(output, dict) and output.get("phase") == "isolated_domain_analysis")
         ]
+        new_information = settings.new_information if state.get("new_info_injection") else None
         prompt = build_supervisor_synthesis_prompt(
             state["scenario"],
             state["candidate_strategies"],
             isolated_outputs,
+            new_information=new_information,
         )
         recommendation = provider_json(
             provider,
@@ -110,6 +112,7 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
             "agent_outputs": [output],
             "round_id": 2,
             "final_recommendation": recommendation.model_dump(mode="json"),
+            "new_information_injected": bool(new_information),
         }
 
     graph = StateGraph(BenchmarkState)

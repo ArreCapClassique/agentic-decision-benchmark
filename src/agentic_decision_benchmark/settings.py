@@ -42,6 +42,8 @@ class BenchmarkSettings(BaseModel):
     temperature: float = 0.2
     max_tokens: int = 1200
     run_output_dir: Path = Field(default_factory=lambda: PROJECT_ROOT / "runs")
+    fault_injection_enabled: bool = False
+    new_info_injection_enabled: bool = False
     faulty_claim: str
     new_information: str
     max_deliberation_cycles: int = 2
@@ -142,6 +144,8 @@ def load_settings(
         run_output_dir=(PROJECT_ROOT / configured_output_dir).resolve()
         if not Path(configured_output_dir).is_absolute()
         else Path(configured_output_dir),
+        fault_injection_enabled=bool(benchmark.get("fault_injection_enabled", False)),
+        new_info_injection_enabled=bool(benchmark.get("new_info_injection_enabled", False)),
         faulty_claim=str(benchmark["faulty_claim"]),
         new_information=str(benchmark["new_information"]),
         max_deliberation_cycles=int(benchmark.get("max_deliberation_cycles", 2)),
