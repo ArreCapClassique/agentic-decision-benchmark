@@ -6,6 +6,7 @@ from agentic_decision_benchmark.prompts import (
     build_generalist_prompt,
     build_self_round1_prompt,
     build_self_round2_prompt,
+    build_self_round4_prompt,
     build_supervisor_synthesis_prompt,
 )
 from agentic_decision_benchmark.schemas import AgentDefinition, BlackboardItem
@@ -93,6 +94,11 @@ def test_self_round1_technology_prompt_contains_only_technology_private_brief() 
     )
     assert "TECH-001" in prompt
     assert "TECH-002" in prompt
+    assert "domain_preferred_strategy" in prompt
+    assert "organization_preferred_strategy" in prompt
+    assert "conditions_for_accepting_other_strategy" in prompt
+    assert "Do not collapse domain_preferred_strategy" in prompt
+    assert "initial_recommendation" not in prompt
     for excluded_id in ["FIN-001", "OPS-001", "HR-001", "LEG-001", "STR-001"]:
         assert excluded_id not in prompt
 
@@ -118,3 +124,21 @@ def test_self_round2_prompt_contains_blackboard_and_own_private_brief() -> None:
     assert "Select up to 3 blackboard items to critique." in prompt
     assert "No supervisor assigns your critique targets." in prompt
     assert "FIN-001" not in prompt
+
+
+def test_self_round4_prompt_requires_complete_nested_scorecard_shape() -> None:
+    technology = _agent("Technology Agent")
+    strategies = load_candidate_strategies()
+    prompt = build_self_round4_prompt(
+        technology,
+        load_scenario(),
+        strategies,
+        _private_brief_for(technology),
+        [],
+    )
+
+    assert f"exactly these strategy keys: {', '.join(strategies)}" in prompt
+    for strategy in [f"\"{strategy_id}\"" for strategy_id in strategies]:
+        assert strategy in prompt
+    for key in ["criteria", "overall", "rationale"]:
+        assert key in prompt

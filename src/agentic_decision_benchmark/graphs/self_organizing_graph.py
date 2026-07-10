@@ -28,6 +28,7 @@ from agentic_decision_benchmark.schemas import (
     Scorecard,
     StrategyId,
     deterministic_blackboard_id,
+    strategy_ids_from_candidates,
 )
 from agentic_decision_benchmark.self_organization.conflict_map import build_conflict_map
 from agentic_decision_benchmark.self_organization.convergence import evaluate_convergence, route_after_convergence
@@ -86,6 +87,9 @@ def _make_blackboard_item(
     confidence: float,
     topic_tags: list[str] | None = None,
     related_strategy: StrategyId | None = None,
+    strategies_supported: list[StrategyId] | None = None,
+    strategies_challenged: list[StrategyId] | None = None,
+    strategies_conditioned: list[StrategyId] | None = None,
     criterion: str | None = None,
     stance: BlackboardStance | None = None,
     severity: int | None = None,
@@ -102,6 +106,9 @@ def _make_blackboard_item(
         content=content,
         topic_tags=topic_tags or _default_topic_tags(content, item_type),
         related_strategy=related_strategy,
+        strategies_supported=strategies_supported or [],
+        strategies_challenged=strategies_challenged or [],
+        strategies_conditioned=strategies_conditioned or [],
         criterion=criterion,
         stance=stance or _default_stance(item_type),
         confidence=confidence,
@@ -140,6 +147,9 @@ def _round1_to_blackboard(
                     confidence=contribution.confidence if contribution.confidence is not None else output.confidence,
                     topic_tags=list(contribution.topic_tags),
                     related_strategy=contribution.related_strategy,
+                    strategies_supported=list(contribution.strategies_supported),
+                    strategies_challenged=list(contribution.strategies_challenged),
+                    strategies_conditioned=list(contribution.strategies_conditioned),
                     criterion=contribution.criterion,
                     stance=contribution.stance,
                     severity=contribution.severity,
@@ -155,6 +165,15 @@ def _round1_to_blackboard(
             ("question", output.questions_for_others),
         ]:
             for content in contents:
+                if item_type in {"claim", "opportunity"}:
+                    linked_strategies = list(output.strategies_supported) or [output.domain_preferred_strategy]
+                    stance: BlackboardStance = "supports"
+                elif item_type == "risk":
+                    linked_strategies = list(output.strategies_challenged) or [output.domain_preferred_strategy]
+                    stance = "challenges"
+                else:
+                    linked_strategies = list(output.conditions_for_accepting_other_strategy) or [output.domain_preferred_strategy]
+                    stance = "neutral"
                 items.append(
                     _make_blackboard_item(
                         round_id=1,
@@ -164,6 +183,11 @@ def _round1_to_blackboard(
                         content=content,
                         index=index,
                         confidence=output.confidence,
+                        related_strategy=linked_strategies[0],
+                        strategies_supported=linked_strategies if stance == "supports" else [],
+                        strategies_challenged=linked_strategies if stance == "challenges" else [],
+                        strategies_conditioned=linked_strategies if stance == "neutral" else [],
+                        stance=stance,
                         severity=3 if item_type == "risk" else None,
                     )
                 )
@@ -174,15 +198,103 @@ def _round1_to_blackboard(
             cycle_id=cycle_id,
             author=agent_name,
             item_type="claim",
-            content=f"Initial recommendation is {_strategy_label(candidate_strategies, output.initial_recommendation)}.",
+            content=f"Domain preference is {_strategy_label(candidate_strategies, output.domain_preferred_strategy)}.",
             index=999,
             confidence=output.confidence,
             topic_tags=["strategic_value"],
-            related_strategy=output.initial_recommendation,
+            related_strategy=output.domain_preferred_strategy,
+            strategies_supported=[output.domain_preferred_strategy],
             criterion="strategic_value",
             stance="supports",
         )
     )
+    items.append(
+        _make_blackboard_item(
+            round_id=1,
+            cycle_id=cycle_id,
+            author=agent_name,
+            item_type="claim",
+            content=f"Organization compromise preference is {_strategy_label(candidate_strategies, output.organization_preferred_strategy)}.",
+            index=1000,
+            confidence=output.confidence,
+            topic_tags=["strategic_value"],
+            related_strategy=output.organization_preferred_strategy,
+            strategies_supported=[output.organization_preferred_strategy],
+            criterion="strategic_value",
+            stance="supports",
+        )
+    )
+    for offset, strategy_id in enumerate(output.strategies_supported, start=1001):
+        items.append(
+            _make_blackboard_item(
+                round_id=1,
+                cycle_id=cycle_id,
+                author=agent_name,
+                item_type="claim",
+                content=f"Domain evidence supports {_strategy_label(candidate_strategies, strategy_id)}.",
+                index=offset,
+                confidence=output.confidence,
+                topic_tags=["strategic_value"],
+                related_strategy=strategy_id,
+                strategies_supported=[strategy_id],
+                criterion="strategic_value",
+                stance="supports",
+            )
+        )
+    for offset, strategy_id in enumerate(output.strategies_challenged, start=1101):
+        items.append(
+            _make_blackboard_item(
+                round_id=1,
+                cycle_id=cycle_id,
+                author=agent_name,
+                item_type="risk",
+                content=f"Domain evidence challenges {_strategy_label(candidate_strategies, strategy_id)}.",
+                index=offset,
+                confidence=output.confidence,
+                topic_tags=["strategic_value"],
+                related_strategy=strategy_id,
+                strategies_challenged=[strategy_id],
+                criterion="strategic_value",
+                stance="challenges",
+                severity=3,
+            )
+        )
+    for offset, constraint in enumerate(output.non_negotiable_constraints, start=1201):
+        items.append(
+            _make_blackboard_item(
+                round_id=1,
+                cycle_id=cycle_id,
+                author=agent_name,
+                item_type="assumption",
+                content=f"Non-negotiable constraint: {constraint}",
+                index=offset,
+                confidence=output.confidence,
+                topic_tags=["strategic_value"],
+                strategies_conditioned=list(output.domain_ranking),
+                criterion="strategic_value",
+                stance="neutral",
+            )
+        )
+    condition_index = 1301
+    for strategy_id, conditions in output.conditions_for_accepting_other_strategy.items():
+        for condition in conditions:
+            items.append(
+                _make_blackboard_item(
+                    round_id=1,
+                    cycle_id=cycle_id,
+                    author=agent_name,
+                    item_type="assumption",
+                    content=f"Condition for accepting {_strategy_label(candidate_strategies, strategy_id)}: {condition}",
+                    index=condition_index,
+                    confidence=output.confidence,
+                    topic_tags=["strategic_value"],
+                    related_strategy=strategy_id,
+                    strategies_conditioned=[strategy_id],
+                    criterion="strategic_value",
+                    stance="neutral",
+                )
+            )
+            condition_index += 1
     return items
 
 
@@ -296,7 +408,7 @@ def _previous_recommendation_for_agent(agent_outputs: list[Any], agent_name: str
             continue
         payload = output["output"]
         if output.get("phase") == "round_1_independent_analysis":
-            previous = payload.get("initial_recommendation")
+            previous = payload.get("organization_preferred_strategy") or payload.get("initial_recommendation")
         if str(output.get("phase", "")).startswith("round_3_belief_update"):
             previous = payload.get("updated_recommendation")
     return previous
@@ -342,6 +454,8 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
         outputs = []
         blackboard_items: list[BlackboardItem] = []
         cycle_id = 1
+        valid_strategy_ids = strategy_ids_from_candidates(state["candidate_strategies"])
+        fault_strategy = "A" if "A" in valid_strategy_ids else valid_strategy_ids[0]
         for agent in agents:
             prompt = build_self_round1_prompt(
                 agent.definition,
@@ -355,6 +469,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                 Round1Analysis,
                 temperature=settings.temperature,
                 max_tokens=settings.max_tokens,
+                valid_strategy_ids=valid_strategy_ids,
             )
             if (
                 state.get("fault_injection")
@@ -367,7 +482,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                         item_type="claim",
                         content=settings.faulty_claim,
                         topic_tags=["ai_feasibility", "implementation_timeline"],
-                        related_strategy="A",
+                        related_strategy=fault_strategy,
                         criterion="operational_feasibility",
                         stance="supports",
                         confidence=analysis.confidence,
@@ -401,6 +516,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
         outputs = []
         blackboard_items: list[BlackboardItem] = []
         cycle_id = int(state.get("deliberation_cycle", 1))
+        valid_strategy_ids = strategy_ids_from_candidates(state["candidate_strategies"])
         blackboard = state.get("blackboard", [])
         salience_map: dict[str, SalienceRecord] = state.get("salience_map", {})
         for agent in agents:
@@ -425,6 +541,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                 Round2CritiqueOutput,
                 temperature=settings.temperature,
                 max_tokens=settings.max_tokens,
+                valid_strategy_ids=valid_strategy_ids,
             )
             outputs.append(
                 make_agent_output(
@@ -476,6 +593,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
         outputs = []
         blackboard_items: list[BlackboardItem] = []
         cycle_id = int(state.get("deliberation_cycle", 1))
+        valid_strategy_ids = strategy_ids_from_candidates(state["candidate_strategies"])
         conflict_map = [to_jsonable(item) for item in state.get("conflict_map", [])]
         unresolved_conflicts = _unresolved_high_severity_conflicts(state.get("conflict_map", []))
         for agent in agents:
@@ -496,6 +614,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                 Round3BeliefUpdate,
                 temperature=settings.temperature,
                 max_tokens=settings.max_tokens,
+                valid_strategy_ids=valid_strategy_ids,
             )
             outputs.append(
                 make_agent_output(
@@ -531,6 +650,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
         blackboard_items: list[BlackboardItem] = []
         scorecards: list[Scorecard] = []
         cycle_id = int(state.get("deliberation_cycle", 1))
+        valid_strategy_ids = strategy_ids_from_candidates(state["candidate_strategies"])
         for agent in agents:
             prompt = build_self_round4_prompt(
                 agent.definition,
@@ -545,6 +665,7 @@ def build_self_organizing_graph(provider: LLMProvider, settings: BenchmarkSettin
                 Round4ScorecardOutput,
                 temperature=settings.temperature,
                 max_tokens=settings.max_tokens,
+                valid_strategy_ids=valid_strategy_ids,
             )
             scorecard = Scorecard(agent=agent.name, round_id=4, scores=card_output.scores, confidence=card_output.confidence)
             scorecards.append(scorecard)

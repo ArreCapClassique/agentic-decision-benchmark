@@ -72,11 +72,19 @@ class OpenAIProvider(BaseLLMProvider):
     def _post_with_retries(self, payload: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
         with httpx.Client(timeout=self.timeout, transport=self.transport) as client:
             for attempt in range(self.max_retries + 1):
-                response = client.post(
-                    f"{self.base_url}/responses",
-                    json=payload,
-                    headers=headers,
-                )
+                try:
+                    response = client.post(
+                        f"{self.base_url}/responses",
+                        json=payload,
+                        headers=headers,
+                    )
+                except httpx.TransportError as exc:
+                    if attempt >= self.max_retries:
+                        raise RuntimeError(
+                            f"OpenAI API request failed after transport retries: {exc}"
+                        ) from exc
+                    time.sleep(self.retry_delay * float(attempt + 1))
+                    continue
                 if response.status_code != 429 or attempt >= self.max_retries:
                     return response
                 time.sleep(_retry_delay(response, attempt=attempt, fallback=self.retry_delay))

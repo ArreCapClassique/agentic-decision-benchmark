@@ -9,9 +9,10 @@ from agentic_decision_benchmark.schemas import (
     BlackboardItem,
     ConsensusResult,
     MCDA_CRITERIA,
-    STRATEGY_IDS,
     Scorecard,
     StrategyId,
+    strategy_id_label,
+    strategy_ids_from_candidates,
 )
 
 
@@ -75,10 +76,22 @@ def run_mcda_consensus(
     if not scorecards:
         raise ValueError("Cannot run MCDA consensus without scorecards.")
 
+    strategy_ids = strategy_ids_from_candidates(candidate_strategies)
+    expected = set(strategy_ids)
+    for scorecard in scorecards:
+        actual = set(scorecard.scores)
+        if actual != expected:
+            missing = sorted(expected - actual)
+            extra = sorted(actual - expected)
+            raise ValueError(
+                f"{scorecard.agent} scorecard must contain exactly "
+                f"{strategy_id_label(strategy_ids)}; missing={missing}, extra={extra}."
+            )
+
     top_votes = Counter(_scorecard_top_vote(scorecard) for scorecard in scorecards)
     aggregate: dict[StrategyId, AggregateStrategyScore] = {}
 
-    for strategy in STRATEGY_IDS:
+    for strategy in strategy_ids:
         overall_scores = [scorecard.scores[strategy].overall for scorecard in scorecards]
         criteria_means = {
             criterion: _mean(

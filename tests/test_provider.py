@@ -27,7 +27,7 @@ class RepairingProvider:
         if len(self.calls) == 1:
             return json.dumps(
                 {
-                    "recommended_strategy": "C",
+                    "recommended_strategy": "Z",
                     "recommendation": "Use a staged dual-track strategy.",
                     "reasoning": "This should be an array.",
                     "risks": "This should be an array.",
@@ -82,6 +82,7 @@ def test_provider_json_retries_schema_invalid_output() -> None:
         SingleRecommendation,
         temperature=0.2,
         max_tokens=100,
+        valid_strategy_ids=("A", "B", "C"),
     )
 
     assert output.reasoning == ["The strategy preserves option value."]
@@ -178,4 +179,38 @@ def test_openai_provider_retries_rate_limit(monkeypatch) -> None:
     assert provider.generate("{}", temperature=0.2, max_tokens=100) == '{"ok": true}'
     assert len(requests) == 2
     assert sleeps == [0.01]
+
+
+def test_openai_provider_retries_transport_error(monkeypatch) -> None:
+    requests: list[httpx.Request] = []
+    sleeps: list[float] = []
+
+    monkeypatch.setattr("agentic_decision_benchmark.llm.openai.time.sleep", sleeps.append)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if len(requests) == 1:
+            raise httpx.ConnectError("temporary DNS failure", request=request)
+        return httpx.Response(
+            200,
+            json={
+                "output_text": '{"ok": true}',
+                "usage": {
+                    "input_tokens": 2,
+                    "output_tokens": 3,
+                },
+            },
+        )
+
+    provider = OpenAIProvider(
+        api_key="test-key",
+        base_url="https://api.openai.test/v1",
+        model="gpt-test",
+        transport=httpx.MockTransport(handler),
+        max_retries=1,
+    )
+
+    assert provider.generate("{}", temperature=0.2, max_tokens=100) == '{"ok": true}'
+    assert len(requests) == 2
+    assert sleeps == [5.0]
 

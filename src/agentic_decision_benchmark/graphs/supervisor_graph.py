@@ -12,7 +12,12 @@ from agentic_decision_benchmark.prompts import (
     build_supervisor_plan_prompt,
     build_supervisor_synthesis_prompt,
 )
-from agentic_decision_benchmark.schemas import DomainAnalysis, SupervisorPlan, SupervisorRecommendation
+from agentic_decision_benchmark.schemas import (
+    DomainAnalysis,
+    SupervisorPlan,
+    SupervisorRecommendation,
+    strategy_ids_from_candidates,
+)
 from agentic_decision_benchmark.settings import (
     BenchmarkSettings,
     format_role_private_brief,
@@ -28,6 +33,7 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
     private_briefs = load_private_role_briefs()
 
     def supervisor_plan_node(state: dict[str, Any]) -> dict[str, Any]:
+        valid_strategy_ids = strategy_ids_from_candidates(state["candidate_strategies"])
         prompt = build_supervisor_plan_prompt(state["scenario"], state["candidate_strategies"])
         plan = provider_json(
             provider,
@@ -35,6 +41,7 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
             SupervisorPlan,
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
+            valid_strategy_ids=valid_strategy_ids,
         )
         output = make_agent_output(
             mode="supervisor",
@@ -48,6 +55,7 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
 
     def isolated_domain_analysis_node(state: dict[str, Any]) -> dict[str, Any]:
         outputs = []
+        valid_strategy_ids = strategy_ids_from_candidates(state["candidate_strategies"])
         for agent in agents:
             inject_fault = state.get("fault_injection") and agent.name == "Technology Agent"
             role_brief = get_private_brief_for_role(private_briefs, agent.domain)
@@ -64,6 +72,7 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
                 DomainAnalysis,
                 temperature=settings.temperature,
                 max_tokens=settings.max_tokens,
+                valid_strategy_ids=valid_strategy_ids,
             )
             if inject_fault and settings.faulty_claim not in analysis.claims:
                 analysis.claims.append(settings.faulty_claim)
@@ -80,6 +89,7 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
         return {"agent_outputs": outputs, "round_id": 1}
 
     def supervisor_synthesis_node(state: dict[str, Any]) -> dict[str, Any]:
+        valid_strategy_ids = strategy_ids_from_candidates(state["candidate_strategies"])
         isolated_outputs = [
             to_jsonable(output)
             for output in state.get("agent_outputs", [])
@@ -99,6 +109,7 @@ def build_supervisor_graph(provider: LLMProvider, settings: BenchmarkSettings):
             SupervisorRecommendation,
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
+            valid_strategy_ids=valid_strategy_ids,
         )
         output = make_agent_output(
             mode="supervisor",

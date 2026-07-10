@@ -34,8 +34,9 @@ def evaluate_convergence(
         phase = str(output.get("phase", ""))
         if not agent or not isinstance(payload, dict):
             continue
-        if phase == "round_1_independent_analysis" and payload.get("initial_recommendation"):
-            fallback_recommendations[agent] = payload["initial_recommendation"]
+        round_1_compromise = payload.get("organization_preferred_strategy") or payload.get("initial_recommendation")
+        if phase == "round_1_independent_analysis" and round_1_compromise:
+            fallback_recommendations[agent] = round_1_compromise
             fallback_confidence[agent] = float(output.get("confidence", payload.get("confidence", 0.0)))
         if phase.startswith("round_3_belief_update") and payload.get("updated_recommendation"):
             latest_recommendations[agent] = payload["updated_recommendation"]
@@ -108,4 +109,3 @@ def route_after_convergence(
     if deliberation_cycle >= max_deliberation_cycles:
         return "round_4_mcda_scorecard"
     return "increment_deliberation_cycle"
-

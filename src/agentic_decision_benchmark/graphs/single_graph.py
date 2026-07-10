@@ -8,6 +8,7 @@ from agentic_decision_benchmark.graphs.common_nodes import make_agent_output, ma
 from agentic_decision_benchmark.llm.base import LLMProvider
 from agentic_decision_benchmark.prompts import build_generalist_prompt
 from agentic_decision_benchmark.schemas import SingleRecommendation
+from agentic_decision_benchmark.schemas import strategy_ids_from_candidates
 from agentic_decision_benchmark.settings import (
     BenchmarkSettings,
     build_consolidated_private_brief_pack,
@@ -23,6 +24,7 @@ def build_single_graph(provider: LLMProvider, settings: BenchmarkSettings):
     def generalist_agent_node(state: dict[str, Any]) -> dict[str, Any]:
         faulty_claim = settings.faulty_claim if state.get("fault_injection") else None
         new_information = settings.new_information if state.get("new_info_injection") else None
+        valid_strategy_ids = strategy_ids_from_candidates(state["candidate_strategies"])
         prompt = build_generalist_prompt(
             state["scenario"],
             state["candidate_strategies"],
@@ -36,6 +38,7 @@ def build_single_graph(provider: LLMProvider, settings: BenchmarkSettings):
             SingleRecommendation,
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
+            valid_strategy_ids=valid_strategy_ids,
         )
         if faulty_claim and not any(faulty_claim in item for item in recommendation.risks + recommendation.assumptions):
             recommendation.assumptions.append(f"Faulty information supplied for resilience test: {faulty_claim}")

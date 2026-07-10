@@ -86,6 +86,61 @@ def _self_blackboard_summary(state: dict[str, Any] | None) -> str:
     return _table(["Item type", "Count"], rows)
 
 
+def _round1_outputs(state: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not state:
+        return []
+    outputs = []
+    for raw_output in state.get("agent_outputs", []):
+        output = to_jsonable(raw_output)
+        if output.get("phase") == "round_1_independent_analysis" and isinstance(output.get("output"), dict):
+            outputs.append(output)
+    return outputs
+
+
+def _initial_domain_preference_diversity(state: dict[str, Any] | None, strategies: dict[str, Any]) -> str:
+    outputs = _round1_outputs(state)
+    rows = []
+    preferences = []
+    for output in outputs:
+        payload = output["output"]
+        preference = payload.get("domain_preferred_strategy")
+        if preference:
+            preferences.append(preference)
+        rows.append(
+            [
+                output.get("agent", "-"),
+                _strategy_name(strategies, preference),
+                " > ".join(payload.get("domain_ranking", [])) or "-",
+            ]
+        )
+    if not rows:
+        return "No Round 1 domain preferences were recorded."
+    unique_count = len(set(preferences))
+    diversity_note = (
+        f"Unique domain-preferred strategies: {unique_count}. "
+        "This is the benchmark's domain-level disagreement check."
+    )
+    return "\n\n".join([diversity_note, _table(["Agent", "Domain preference", "Domain ranking"], rows)])
+
+
+def _initial_organization_preference_distribution(state: dict[str, Any] | None, strategies: dict[str, Any]) -> str:
+    outputs = _round1_outputs(state)
+    preferences = [
+        output["output"].get("organization_preferred_strategy")
+        for output in outputs
+        if output["output"].get("organization_preferred_strategy")
+    ]
+    if not preferences:
+        return "No Round 1 organization compromise preferences were recorded."
+    counts = Counter(preferences)
+    rows = [[_strategy_name(strategies, strategy_id), count] for strategy_id, count in sorted(counts.items())]
+    note = (
+        "A unanimous organization_preferred_strategy records compromise alignment, not a domain-diversity failure. "
+        "Use domain_preferred_strategy to assess whether initial domain disagreement was captured."
+    )
+    return "\n\n".join([note, _table(["Organization preference", "Agents"], rows)])
+
+
 def _items_by_type(state: dict[str, Any] | None, item_type: str, limit: int = 8) -> list[str]:
     if not state:
         return []
@@ -268,6 +323,12 @@ def write_comparative_report(run_dir: Path, states: dict[str, dict[str, Any]]) -
         "",
         "## self_organizing Blackboard Summary",
         _self_blackboard_summary(self_state),
+        "",
+        "## Initial Domain Preference Diversity",
+        _initial_domain_preference_diversity(self_state, strategies),
+        "",
+        "## Initial Organization Preference Distribution",
+        _initial_organization_preference_distribution(self_state, strategies),
         "",
         "## Self-Organizing Deliberation Loop",
         "The `self_organizing` mode uses four macro-rounds, but the critique/update phase is adaptive.",

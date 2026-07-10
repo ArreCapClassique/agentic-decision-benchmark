@@ -87,3 +87,25 @@ def test_minority_concerns_are_preserved() -> None:
     )
     assert "Hiring may constrain the ramp." in result.minority_concerns
 
+
+def test_mcda_uses_dynamic_candidate_strategy_ids() -> None:
+    strategies = {
+        "A": {"name": "A", "description": "A"},
+        "B": {"name": "B", "description": "B"},
+        "C": {"name": "C", "description": "C"},
+    }
+    card = Scorecard(
+        agent="one",
+        scores={
+            "A": _score(3),
+            "B": _score(2),
+            "C": _score(4),
+        },
+        confidence=0.8,
+    )
+
+    result = run_mcda_consensus(scorecards=[card], candidate_strategies=strategies, blackboard=[])
+
+    assert result.recommended_strategy == "C"
+    assert set(result.aggregate_scores) == {"A", "B", "C"}
+

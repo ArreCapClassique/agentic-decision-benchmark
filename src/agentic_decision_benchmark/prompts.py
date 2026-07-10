@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from agentic_decision_benchmark.schemas import AgentDefinition, BlackboardItem, TOPIC_TAGS
+from agentic_decision_benchmark.schemas import AgentDefinition, BlackboardItem, TOPIC_TAGS, strategy_ids_from_candidates
 from agentic_decision_benchmark.utils.json_utils import to_jsonable
 
 
 STRICT_JSON_RULES = (
     "Output valid JSON only. Do not include Markdown. Do not include explanations outside JSON. "
     "When a return field expects a list, output a JSON array of strings or objects, not a single string. "
-    "For recommended_strategy, initial_recommendation, and updated_recommendation, output exactly one strategy ID: A, B, C, or D. "
+    "For strategy ID fields, output exactly one key from candidate_strategies. "
     "Stay within the assigned role. Use only the provided scenario, candidate strategies, private brief or consolidated private pack when present, visible blackboard data, fault context, and new information. "
     "Calibrate confidence between 0 and 1. Avoid inventing facts not present in the scenario."
 )
@@ -27,6 +27,14 @@ def _base_context(scenario: str, candidate_strategies: dict[str, Any]) -> dict[s
     }
 
 
+def _strategy_id_text(candidate_strategies: dict[str, Any]) -> str:
+    return ", ".join(strategy_ids_from_candidates(candidate_strategies))
+
+
+def _strategy_id_line(candidate_strategies: dict[str, Any]) -> str:
+    return f"Allowed strategy IDs: {_strategy_id_text(candidate_strategies)}."
+
+
 def build_generalist_prompt(
     scenario: str,
     candidate_strategies: dict[str, Any],
@@ -41,6 +49,7 @@ def build_generalist_prompt(
             f"RULES: {STRICT_JSON_RULES}",
             "ROLE: Generalist strategy consultant.",
             "Return schema keys: recommended_strategy, recommendation, reasoning, risks, assumptions, confidence.",
+            _strategy_id_line(candidate_strategies),
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             "CONSOLIDATED PRIVATE ROLE-SPECIFIC INFORMATION PACK",
             "The following synthetic information combines all role-specific private briefs. Use it as the full information pack available to the generalist baseline.",
@@ -60,6 +69,7 @@ def build_supervisor_plan_prompt(scenario: str, candidate_strategies: dict[str, 
             f"RULES: {STRICT_JSON_RULES}",
             "ROLE: Supervisor. Plan isolated expert work; do not decide yet.",
             "Return schema keys: plan, domains_to_consult, decision_criteria, confidence.",
+            _strategy_id_line(candidate_strategies),
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
         ]
     )
@@ -82,6 +92,8 @@ def build_domain_analysis_prompt(
             "PHASE: Isolated analysis. You cannot see other agents and must not critique them.",
             f"AGENT_PROFILE: {_payload(agent.model_dump())}",
             "Return schema keys: claims, risks, opportunities, assumptions, recommendation, confidence.",
+            "The recommendation field must be exactly one strategy ID, not a sentence.",
+            _strategy_id_line(candidate_strategies),
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             "PRIVATE ROLE-SPECIFIC BRIEF",
             "The following information is synthetic private case knowledge visible to your role only.",
@@ -107,6 +119,7 @@ def build_supervisor_synthesis_prompt(
             f"RULES: {STRICT_JSON_RULES}",
             "ROLE: Supervisor. You are the central decision-maker for this mode.",
             "Return schema keys: recommended_strategy, recommendation, synthesis, tradeoffs, risks, assumptions, confidence.",
+            _strategy_id_line(candidate_strategies),
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             f"ISOLATED_OUTPUTS: {_payload({'outputs': isolated_outputs})}",
             "NEW_INFORMATION",
@@ -141,9 +154,16 @@ def build_self_round1_prompt(
             f"AGENT_DOMAIN: {agent.domain}",
             f"RULES: {STRICT_JSON_RULES}",
             "PHASE: Round 1 independent analysis. Do not reference other agents because you have not seen their outputs.",
+            "First recommend from your own domain perspective only, even if that differs from the organization-wide compromise.",
+            "Then separately provide your organization-wide compromise recommendation.",
+            "Do not collapse domain_preferred_strategy into organization_preferred_strategy unless your domain evidence genuinely supports the same choice.",
             f"AGENT_PROFILE: {_payload(agent.model_dump())}",
-            "Return schema keys: claims, risks, opportunities, assumptions, questions_for_others, initial_recommendation, blackboard_items, confidence.",
-            "Optional blackboard_items entries use keys: item_type, content, topic_tags, related_strategy, criterion, stance, confidence, severity.",
+            "Return schema keys: claims, risks, opportunities, assumptions, questions_for_others, domain_preferred_strategy, organization_preferred_strategy, domain_ranking, organization_ranking, strategies_supported, strategies_challenged, non_negotiable_constraints, conditions_for_accepting_other_strategy, blackboard_items, confidence.",
+            "domain_ranking and organization_ranking must rank strategy IDs from most to least preferred for the relevant perspective.",
+            "conditions_for_accepting_other_strategy must be an object keyed by strategy ID, with each value a list of concrete conditions.",
+            "Optional blackboard_items entries use keys: item_type, content, topic_tags, related_strategy, strategies_supported, strategies_challenged, strategies_conditioned, criterion, stance, confidence, severity.",
+            "Each blackboard item must identify the strategy it supports, challenges, opposes, or conditions. Do not default unrelated evidence to the organization_preferred_strategy.",
+            _strategy_id_line(candidate_strategies),
             f"Allowed topic_tags: {', '.join(TOPIC_TAGS)}.",
             "Allowed stance values: supports, opposes, neutral, challenges.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
@@ -179,6 +199,7 @@ def build_self_round2_prompt(
             "No supervisor assigns your critique targets. You choose them based on local domain rules and blackboard signals.",
             "Return schema keys: agent_name, selected_items, critiques.",
             "Each critique needs target_item_id, target_agent, target_claim, critique, missing_assumption, risk_introduced, topic_tags, related_strategy, criterion, severity, confidence.",
+            _strategy_id_line(candidate_strategies),
             f"Allowed topic_tags: {', '.join(TOPIC_TAGS)}.",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             *_private_brief_section(private_brief),
@@ -209,6 +230,7 @@ def build_self_round3_prompt(
             "PHASE: Round 3 belief update. Read all previous blackboard items, critiques, conflict map, and new information. Update your position without restarting from scratch.",
             "Update your position based on accepted critiques, rejected critiques, conflict map, newly revealed private information from other agents through the blackboard, and unresolved high-severity risks.",
             "Return schema keys: agent_name, updated_recommendation, changed_beliefs, accepted_critiques, rejected_critiques, remaining_concerns, confidence.",
+            _strategy_id_line(candidate_strategies),
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             *_private_brief_section(private_brief),
             f"PREVIOUS_OWN_RECOMMENDATION: {previous_recommendation or 'None'}",
@@ -227,15 +249,36 @@ def build_self_round4_prompt(
     private_brief: str | None,
     blackboard: list[BlackboardItem],
 ) -> str:
+    strategy_ids = strategy_ids_from_candidates(candidate_strategies)
+    scorecard_shape = {
+        "scores": {
+            strategy: {
+                "criteria": {
+                    "financial_viability": 3,
+                    "operational_feasibility": 3,
+                    "strategic_value": 3,
+                    "workforce_feasibility": 3,
+                    "legal_compliance_safety": 3,
+                },
+                "overall": 3.0,
+                "rationale": f"Brief rationale for Strategy {strategy}.",
+            }
+            for strategy in strategy_ids
+        },
+        "confidence": 0.7,
+    }
     return "\n".join(
         [
             "TASK: SELF_ORGANIZING_ROUND_4",
             f"AGENT_NAME: {agent.name}",
             f"AGENT_DOMAIN: {agent.domain}",
             f"RULES: {STRICT_JSON_RULES}",
-            "PHASE: Round 4 MCDA scorecard. Score A, B, C, and D using the shared criteria.",
+            f"PHASE: Round 4 MCDA scorecard. Score {_strategy_id_text(candidate_strategies)} using the shared criteria.",
             "Scores must be integers from 1 to 5. Criteria: financial_viability, operational_feasibility, strategic_value, workforce_feasibility, legal_compliance_safety.",
             "Return schema keys: scores, confidence.",
+            f"The scores object must contain exactly these strategy keys: {_strategy_id_text(candidate_strategies)}. Do not omit any strategy.",
+            "Each strategy must contain criteria, overall, and rationale. Criteria must contain the five integer criteria scores.",
+            f"Required JSON shape example: {_payload(scorecard_shape)}",
             f"CONTEXT: {_payload(_base_context(scenario, candidate_strategies))}",
             *_private_brief_section(private_brief),
             f"VISIBLE_BLACKBOARD: {_payload({'blackboard': blackboard})}",

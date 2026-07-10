@@ -22,7 +22,7 @@ class MockProvider(BaseLLMProvider):
             "SELF_ORGANIZING_ROUND_1": lambda: self._round1(agent, prompt),
             "SELF_ORGANIZING_ROUND_2": lambda: self._round2(agent, prompt),
             "SELF_ORGANIZING_ROUND_3": lambda: self._round3(agent, prompt),
-            "SELF_ORGANIZING_ROUND_4": lambda: self._round4(agent),
+            "SELF_ORGANIZING_ROUND_4": lambda: self._round4(agent, prompt),
             "EVALUATOR": lambda: self._evaluator(prompt),
         }
         if task not in handlers:
@@ -74,6 +74,138 @@ class MockProvider(BaseLLMProvider):
         strategies = context.get("candidate_strategies", {})
         return strategies if isinstance(strategies, dict) else {}
 
+    def _strategy_ids(self, prompt: str) -> tuple[str, ...]:
+        strategies = self._candidate_strategies(prompt)
+        strategy_ids = tuple(str(key) for key in strategies)
+        return strategy_ids or ("A", "B", "C", "D")
+
+    def _strategy_text(self, prompt: str, strategy_id: str) -> str:
+        details = self._strategy_details(prompt, strategy_id)
+        values = [
+            strategy_id,
+            details.get("name"),
+            details.get("description"),
+            details.get("core_tradeoff"),
+        ]
+        return " ".join(str(value) for value in values if value).lower()
+
+    def _strategy_id_by_keywords(
+        self,
+        prompt: str,
+        keywords: tuple[str, ...],
+        *,
+        fallback: str | None = None,
+    ) -> str | None:
+        scored: list[tuple[int, str]] = []
+        for strategy_id in self._strategy_ids(prompt):
+            text = self._strategy_text(prompt, strategy_id)
+            score = sum(1 for keyword in keywords if keyword.lower() in text)
+            if score:
+                scored.append((score, strategy_id))
+        if scored:
+            return sorted(scored, key=lambda item: (-item[0], item[1]))[0][1]
+        return fallback
+
+    def _strategy_ranking_by_keyword_groups(
+        self,
+        prompt: str,
+        keyword_groups: list[tuple[str, ...]],
+    ) -> list[str]:
+        ranking: list[str] = []
+        for keywords in keyword_groups:
+            strategy_id = self._strategy_id_by_keywords(prompt, keywords)
+            if strategy_id and strategy_id not in ranking:
+                ranking.append(strategy_id)
+        for strategy_id in self._strategy_ids(prompt):
+            if strategy_id not in ranking:
+                ranking.append(strategy_id)
+        return ranking
+
+    def _preferred_strategy_id(self, prompt: str) -> str:
+        strategy_ids = self._strategy_ids(prompt)
+        return self._strategy_id_by_keywords(
+            prompt,
+            ("dual", "option", "conditional", "pilot", "negotiation", "flexibility"),
+            fallback=strategy_ids[0],
+        ) or strategy_ids[0]
+
+    def _technology_strategy_id(self, prompt: str) -> str:
+        return self._strategy_id_by_keywords(
+            prompt,
+            ("pilot", "predictive quality", "data", "ai", "roadmap"),
+            fallback=self._preferred_strategy_id(prompt),
+        ) or self._preferred_strategy_id(prompt)
+
+    def _domain_strategy_id(self, agent: str, prompt: str) -> str:
+        keywords_by_agent = {
+            "Finance Agent": ("liquidity", "cash", "pause", "freeze"),
+            "Operations Agent": ("oem", "assurance", "quality", "sprint"),
+            "HR Agent": ("liquidity", "workforce stability", "pause", "freeze"),
+            "Legal / Compliance Agent": ("oem", "contract", "compliance", "assurance"),
+            "Strategy Agent": ("renewables", "wind", "diversification", "capacity commitment"),
+            "Technology Agent": ("pilot", "predictive quality", "data", "roadmap"),
+        }
+        return self._strategy_id_by_keywords(
+            prompt,
+            keywords_by_agent.get(agent, ("option", "strategic")),
+            fallback=self._preferred_strategy_id(prompt),
+        ) or self._preferred_strategy_id(prompt)
+
+    def _domain_ranking(self, agent: str, prompt: str) -> list[str]:
+        keyword_groups_by_agent = {
+            "Finance Agent": [
+                ("liquidity", "cash", "pause", "freeze"),
+                ("dual", "option", "conditional", "pilot"),
+                ("oem", "assurance", "compliance"),
+                ("renewables", "wind", "retooling"),
+            ],
+            "Operations Agent": [
+                ("oem", "assurance", "quality", "sprint"),
+                ("dual", "option", "conditional", "pilot"),
+                ("liquidity", "pause", "freeze"),
+                ("renewables", "wind", "retooling"),
+            ],
+            "HR Agent": [
+                ("liquidity", "workforce stability", "pause", "freeze"),
+                ("dual", "option", "conditional", "pilot"),
+                ("oem", "assurance", "compliance"),
+                ("renewables", "wind", "retooling"),
+            ],
+            "Legal / Compliance Agent": [
+                ("oem", "contract", "compliance", "assurance"),
+                ("dual", "option", "conditional", "written"),
+                ("liquidity", "pause", "freeze"),
+                ("renewables", "wind", "penalties"),
+            ],
+            "Strategy Agent": [
+                ("renewables", "wind", "diversification", "capacity commitment"),
+                ("dual", "option", "conditional", "negotiation"),
+                ("oem", "assurance", "customer concentration"),
+                ("liquidity", "pause", "freeze"),
+            ],
+            "Technology Agent": [
+                ("pilot", "predictive quality", "data", "roadmap"),
+                ("oem", "assurance", "ai"),
+                ("liquidity", "pause", "freeze"),
+                ("renewables", "wind", "process"),
+            ],
+        }
+        return self._strategy_ranking_by_keyword_groups(
+            prompt,
+            keyword_groups_by_agent.get(agent, [("option", "strategic")]),
+        )
+
+    def _organization_ranking(self, prompt: str) -> list[str]:
+        return self._strategy_ranking_by_keyword_groups(
+            prompt,
+            [
+                ("dual", "option", "conditional", "pilot", "negotiation"),
+                ("oem", "assurance", "compliance"),
+                ("renewables", "wind", "diversification"),
+                ("liquidity", "pause", "freeze"),
+            ],
+        )
+
     def _strategy_details(self, prompt: str, strategy_id: str) -> dict[str, Any]:
         details = self._candidate_strategies(prompt).get(strategy_id, {})
         return details if isinstance(details, dict) else {}
@@ -96,7 +228,8 @@ class MockProvider(BaseLLMProvider):
         return str(details.get("core_tradeoff") or "Execution depends on disciplined milestones and evidence gates.")
 
     def _strategy_claim(self, prompt: str) -> str:
-        return f"{self._strategy_label(prompt, 'C')} best matches the case: {self._strategy_description(prompt, 'C')}"
+        strategy_id = self._preferred_strategy_id(prompt)
+        return f"{self._strategy_label(prompt, strategy_id)} best matches the case: {self._strategy_description(prompt, strategy_id)}"
 
     @staticmethod
     def _score(value: float) -> float:
@@ -124,9 +257,10 @@ class MockProvider(BaseLLMProvider):
 
     def _generalist(self, prompt: str) -> dict[str, Any]:
         has_new_information = "extends the compliance deadline from 18 months to 24 months" in prompt
-        c_label = self._strategy_label(prompt, "C")
-        c_description = self._strategy_description(prompt, "C")
-        c_tradeoff = self._strategy_tradeoff(prompt, "C")
+        preferred = self._preferred_strategy_id(prompt)
+        c_label = self._strategy_label(prompt, preferred)
+        c_description = self._strategy_description(prompt, preferred)
+        c_tradeoff = self._strategy_tradeoff(prompt, preferred)
         reasoning = [
             "The OEM revenue exposure is too large to ignore.",
             "A full wind pivot creates execution and cash-flow risk.",
@@ -148,7 +282,7 @@ class MockProvider(BaseLLMProvider):
             risks.append("The extra deadline relief could create complacency if EuroTech delays sensor, data, and auditability work.")
             assumptions.append("The OEM's 24 months deadline extension is firm enough to use for planning gates.")
         return {
-            "recommended_strategy": "C",
+            "recommended_strategy": preferred,
             "recommendation": f"Adopt {c_label}: {c_description}",
             "reasoning": reasoning,
             "risks": risks,
@@ -183,13 +317,14 @@ class MockProvider(BaseLLMProvider):
 
     def _domain_analysis(self, agent: str, prompt: str) -> dict[str, Any]:
         domain = self._agent_domain(agent)
-        c_label = self._strategy_label(prompt, "C")
-        c_description = self._strategy_description(prompt, "C")
-        recommendation = "C"
+        preferred = self._preferred_strategy_id(prompt)
+        c_label = self._strategy_label(prompt, preferred)
+        c_description = self._strategy_description(prompt, preferred)
+        recommendation = preferred
         if agent == "Technology Agent":
-            recommendation = "A"
+            recommendation = self._technology_strategy_id(prompt)
         if agent == "Strategy Agent":
-            recommendation = "C"
+            recommendation = preferred
         claims = [
             f"From the {domain} perspective, {c_label} keeps the most decision flexibility.",
             f"Its stated action plan is: {c_description}",
@@ -217,9 +352,10 @@ class MockProvider(BaseLLMProvider):
 
     def _supervisor_synthesis(self, prompt: str) -> dict[str, Any]:
         has_new_information = "extends the compliance deadline from 18 months to 24 months" in prompt
-        c_label = self._strategy_label(prompt, "C")
-        c_description = self._strategy_description(prompt, "C")
-        c_tradeoff = self._strategy_tradeoff(prompt, "C")
+        preferred = self._preferred_strategy_id(prompt)
+        c_label = self._strategy_label(prompt, preferred)
+        c_description = self._strategy_description(prompt, preferred)
+        c_tradeoff = self._strategy_tradeoff(prompt, preferred)
         synthesis = [
             "Finance and operations favor staged investment over a large irreversible pivot.",
             "Technology and compliance require auditability, data readiness, and model monitoring.",
@@ -244,7 +380,7 @@ class MockProvider(BaseLLMProvider):
             risks.append("A longer deadline can still be missed if foundational data and auditability milestones slip.")
             assumptions.append("The OEM's 24 months deadline extension applies to the same predictive quality requirement.")
         return {
-            "recommended_strategy": "C",
+            "recommended_strategy": preferred,
             "recommendation": f"Choose {c_label} with explicit gates: {c_description}",
             "synthesis": synthesis,
             "tradeoffs": tradeoffs,
@@ -255,16 +391,31 @@ class MockProvider(BaseLLMProvider):
 
     def _round1(self, agent: str, prompt: str) -> dict[str, Any]:
         domain = self._agent_domain(agent)
-        c_claim = self._strategy_claim(prompt)
-        recommendation = "C"
-        if agent == "Technology Agent":
-            recommendation = "A"
+        organization_preference = self._preferred_strategy_id(prompt)
+        domain_preference = self._domain_strategy_id(agent, prompt)
+        domain_ranking = self._domain_ranking(agent, prompt)
+        organization_ranking = self._organization_ranking(prompt)
+        challenged = [strategy_id for strategy_id in domain_ranking[-2:] if strategy_id != domain_preference]
+        supported = [strategy_id for strategy_id in [domain_preference, organization_preference] if strategy_id not in challenged]
+        wind_strategy = self._strategy_id_by_keywords(
+            prompt,
+            ("renewables", "wind", "retooling"),
+            fallback=domain_ranking[-1],
+        ) or domain_ranking[-1]
+        liquidity_strategy = self._strategy_id_by_keywords(
+            prompt,
+            ("liquidity", "cash", "pause", "freeze"),
+            fallback=domain_ranking[-1],
+        ) or domain_ranking[-1]
+        domain_label = self._strategy_label(prompt, domain_preference)
+        organization_label = self._strategy_label(prompt, organization_preference)
         structured_items = [
             {
                 "item_type": "claim",
-                "content": f"{agent} sees {domain} as a binding constraint on any strategy.",
+                "content": f"From the {domain} perspective, {domain_label} best fits the role-specific constraints.",
                 "topic_tags": ["strategic_value"],
-                "related_strategy": recommendation,
+                "related_strategy": domain_preference,
+                "strategies_supported": [domain_preference],
                 "criterion": "strategic_value",
                 "stance": "supports",
                 "confidence": 0.68,
@@ -272,9 +423,10 @@ class MockProvider(BaseLLMProvider):
             },
             {
                 "item_type": "claim",
-                "content": c_claim,
+                "content": f"As an organization-wide compromise, {organization_label} preserves the most negotiable option value.",
                 "topic_tags": ["strategic_value", "diversification"],
-                "related_strategy": "C",
+                "related_strategy": organization_preference,
+                "strategies_supported": [organization_preference],
                 "criterion": "strategic_value",
                 "stance": "supports",
                 "confidence": 0.68,
@@ -282,9 +434,10 @@ class MockProvider(BaseLLMProvider):
             },
             {
                 "item_type": "risk",
-                "content": f"{agent} flags that Strategy B may overextend investment capacity and execution bandwidth.",
+                "content": f"{agent} flags that {self._strategy_label(prompt, wind_strategy)} may overextend investment capacity and execution bandwidth.",
                 "topic_tags": ["investment_capacity", "cash_flow"],
-                "related_strategy": "B",
+                "related_strategy": wind_strategy,
+                "strategies_challenged": [wind_strategy],
                 "criterion": "financial_viability",
                 "stance": "opposes",
                 "confidence": 0.72,
@@ -292,12 +445,14 @@ class MockProvider(BaseLLMProvider):
             },
         ]
         if agent == "Technology Agent":
+            technology_strategy = self._technology_strategy_id(prompt)
             structured_items.append(
                 {
                     "item_type": "claim",
                     "content": "Pilot-line AI predictive quality deployment is feasible in 9 to 12 months if data readiness work starts immediately.",
                     "topic_tags": ["ai_feasibility", "data_readiness", "implementation_timeline"],
-                    "related_strategy": "A",
+                    "related_strategy": technology_strategy,
+                    "strategies_supported": [technology_strategy],
                     "criterion": "operational_feasibility",
                     "stance": "supports",
                     "confidence": 0.78,
@@ -305,27 +460,41 @@ class MockProvider(BaseLLMProvider):
                 }
             )
         if agent == "Operations Agent":
+            technology_strategy = self._technology_strategy_id(prompt)
             structured_items.append(
                 {
                     "item_type": "risk",
                     "content": "Plant-wide AI rollout could disrupt production if retooling and data work are compressed.",
                     "topic_tags": ["ai_feasibility", "production_disruption", "implementation_timeline"],
-                    "related_strategy": "A",
+                    "related_strategy": technology_strategy,
+                    "strategies_challenged": [technology_strategy],
                     "criterion": "operational_feasibility",
                     "stance": "opposes",
                     "confidence": 0.8,
                     "severity": 4,
                 }
             )
+        risks = [
+            f"{agent} flags that {self._strategy_label(prompt, wind_strategy)} may overextend the organization.",
+        ]
+        risks.append(
+            f"{self._strategy_label(prompt, liquidity_strategy)} risks both OEM loss and missed wind timing if used as the default posture."
+        )
+        conditions = {
+            strategy_id: [
+                f"{agent} would accept {self._strategy_label(prompt, strategy_id)} only if it satisfies the {domain} non-negotiables."
+            ]
+            for strategy_id in domain_ranking
+            if strategy_id != domain_preference
+        }
+
         return {
             "claims": [
                 f"{agent} sees {domain} as a binding constraint on any strategy.",
-                c_claim,
+                f"{domain_label} is the domain-preferred option for this role.",
+                f"{organization_label} is the separate organization-wide compromise.",
             ],
-            "risks": [
-                f"{agent} flags that Strategy B may overextend the organization.",
-                "Strategy D risks both OEM loss and missed wind timing.",
-            ],
+            "risks": risks,
             "opportunities": [
                 "Use gated pilots to learn before full commitment.",
                 "Convert compliance work into reusable quality capability.",
@@ -337,7 +506,17 @@ class MockProvider(BaseLLMProvider):
             "questions_for_others": [
                 f"What evidence would make {agent} change its recommendation?",
             ],
-            "initial_recommendation": recommendation,
+            "domain_preferred_strategy": domain_preference,
+            "organization_preferred_strategy": organization_preference,
+            "domain_ranking": domain_ranking,
+            "organization_ranking": organization_ranking,
+            "strategies_supported": supported,
+            "strategies_challenged": challenged,
+            "non_negotiable_constraints": [
+                f"{agent} cannot endorse a plan that ignores {domain}.",
+                "Any accepted plan must have explicit gates, accountable owners, and evidence milestones.",
+            ],
+            "conditions_for_accepting_other_strategy": conditions,
             "blackboard_items": structured_items,
             "confidence": 0.68,
         }
@@ -351,6 +530,7 @@ class MockProvider(BaseLLMProvider):
         )
         faulty = "3 months with minimal cost and minimal integration risk" in prompt
         if faulty and agent != "Technology Agent":
+            technology_strategy = self._technology_strategy_id(prompt)
             faulty_target = self._find_blackboard_item(
                 prompt,
                 author="Technology Agent",
@@ -372,12 +552,13 @@ class MockProvider(BaseLLMProvider):
                         "topic_tags": ["ai_feasibility", "data_readiness", "implementation_timeline"],
                         "severity": 5,
                         "confidence": 0.88,
-                        "related_strategy": "A",
+                        "related_strategy": technology_strategy,
                         "criterion": "operational_feasibility",
                     }
                 ]
             }
         if agent in {"Finance Agent", "Operations Agent"} and ai_target:
+            technology_strategy = self._technology_strategy_id(prompt)
             return {
                 "agent_name": agent,
                 "selected_items": [ai_target["id"]],
@@ -392,7 +573,7 @@ class MockProvider(BaseLLMProvider):
                         "topic_tags": ["ai_feasibility", "data_readiness", "implementation_timeline"],
                         "severity": 4,
                         "confidence": 0.82,
-                        "related_strategy": "A",
+                        "related_strategy": technology_strategy,
                         "criterion": "operational_feasibility",
                     }
                 ],
@@ -419,14 +600,15 @@ class MockProvider(BaseLLMProvider):
                     "topic_tags": ["strategic_value", "implementation_timeline"],
                     "severity": 3,
                     "confidence": 0.74,
-                    "related_strategy": "C",
+                    "related_strategy": self._preferred_strategy_id(prompt),
                     "criterion": "strategic_value",
                 }
             ]
         }
 
     def _round3(self, agent: str, prompt: str) -> dict[str, Any]:
-        c_label = self._strategy_label(prompt, "C")
+        preferred = self._preferred_strategy_id(prompt)
+        c_label = self._strategy_label(prompt, preferred)
         changed = [f"{c_label} remains preferred if investment gates and sequencing are explicit."]
         accepted = ["Accepted critique that execution needs governance and milestones."]
         concerns = ["Remaining concern: cash and management bandwidth may constrain sequencing."]
@@ -436,19 +618,21 @@ class MockProvider(BaseLLMProvider):
         if "extends the compliance deadline from 18 months to 24 months" in prompt:
             changed.append("The 24-month deadline improves feasibility of phased OEM compliance.")
             concerns.append("New timing relief should not be used to delay data-readiness work.")
+        rejected = ["Rejected any implication that a lower-investment option is safer merely because it spends less."]
+        if "D" in self._strategy_ids(prompt):
+            rejected = ["Rejected any implication that Strategy D is safer merely because it spends less."]
+
         return {
             "agent_name": agent,
-            "updated_recommendation": "C",
+            "updated_recommendation": preferred,
             "changed_beliefs": changed,
             "accepted_critiques": accepted,
-            "rejected_critiques": [
-                "Rejected any implication that Strategy D is safer merely because it spends less.",
-            ],
+            "rejected_critiques": rejected,
             "remaining_concerns": concerns,
             "confidence": 0.8,
         }
 
-    def _round4(self, agent: str) -> dict[str, Any]:
+    def _round4(self, agent: str, prompt: str) -> dict[str, Any]:
         matrices = {
             "Finance Agent": {
                 "A": [3, 3, 3, 3, 4],
@@ -488,6 +672,7 @@ class MockProvider(BaseLLMProvider):
             },
         }
         selected = matrices.get(agent, matrices["Strategy Agent"])
+        strategy_ids = self._strategy_ids(prompt)
         criteria_names = [
             "financial_viability",
             "operational_feasibility",
@@ -496,7 +681,8 @@ class MockProvider(BaseLLMProvider):
             "legal_compliance_safety",
         ]
         scores = {}
-        for strategy, values in selected.items():
+        for strategy in strategy_ids:
+            values = selected.get(strategy, [3, 3, 3, 3, 3])
             criteria = dict(zip(criteria_names, values, strict=True))
             scores[strategy] = {
                 "criteria": criteria,

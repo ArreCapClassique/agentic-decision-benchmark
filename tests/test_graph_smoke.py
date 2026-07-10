@@ -87,8 +87,21 @@ def test_self_organizing_graph_runs_with_blackboard_scorecards_and_consensus(tmp
     assert any(item.item_type == "new_information" for item in state["blackboard"])
     assert any(item.item_type == "scorecard" for item in state["blackboard"])
     blackboard_text = "\n".join(item.content for item in state["blackboard"])
-    assert "Strategy C (Sequential real-options strategy)" in blackboard_text
+    expected_strategy_label = f"Strategy C ({load_candidate_strategies()['C']['name']})"
+    assert expected_strategy_label in blackboard_text
     assert "dual-track" not in blackboard_text.lower()
     assert state["metadata"]["information_setting"] == "equal_total"
     assert state["metadata"]["private_role_briefs_enabled"] is True
 
+
+def test_self_organizing_round1_domain_preferences_are_role_diverse(tmp_path) -> None:
+    graph = build_self_organizing_graph(MockProvider(), _settings(tmp_path))
+    state = graph.invoke(_initial("self_organizing"))
+    preferences = {
+        item.agent: item.output["domain_preferred_strategy"]
+        for item in state["agent_outputs"]
+        if item.phase == "round_1_independent_analysis"
+    }
+
+    assert len(preferences) == 6
+    assert len(set(preferences.values())) >= 3

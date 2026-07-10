@@ -1,19 +1,19 @@
 A:
-  name: "OEM compliance bet"
-  description: "Prioritize the automotive OEM requirement by committing most available investment capacity to AI-enabled predictive quality management."
-  core_tradeoff: "Maximizes chance of retaining the OEM contract, but leaves little capital, workforce, and plant capacity for the wind opportunity."
+  name: "OEM assurance sprint"
+  description: "Concentrate capital, management attention, and technical resources on satisfying the automotive OEM’s AI-enabled predictive quality requirement. Wind engagement is kept exploratory until OEM compliance risk is reduced."
+  core_tradeoff: "Maximizes near-term contract protection and legal defensibility, but deepens customer concentration and may consume the scarce capital, talent, and plant capacity needed for renewable-energy diversification."
 
 B:
-  name: "Wind pivot bet"
-  description: "Commit aggressively to the wind turbine partnership and redirect investment, hiring, and retooling capacity toward renewable-energy components."
-  core_tradeoff: "Accelerates diversification away from automotive dependence, but increases the probability of losing the OEM contract."
+  name: "Renewables acceleration"
+  description: "Prioritize the wind turbine partnership by reserving retooling capacity, hiring wind-sector specialists, and offering the wind customer a strong capacity commitment within its decision window."
+  core_tradeoff: "Improves strategic diversification and positions EuroTech in a growing renewables market, but increases the probability of OEM contract loss, near-term revenue shock, and contractual exposure if ramp-up milestones are missed."
 
 C:
-  name: "Sequential real-options strategy"
-  description: "Pursue a limited OEM AI pilot first, negotiate conditional acceptance with the OEM, and delay full wind commitment until technical and financial gates are met."
-  core_tradeoff: "Preserves flexibility, but risks satisfying neither side quickly enough: the OEM may reject partial compliance, while the wind partner may choose a faster supplier."
+  name: "Non-binding dual negotiation"
+  description: "Attempt to keep both opportunities open by offering the OEM a pilot-based AI roadmap and offering the wind customer a non-binding conditional ramp-up plan, without committing major capital until both parties respond."
+  core_tradeoff: "Preserves optionality and liquidity, but creates a high risk that both counterparties see EuroTech as non-committal: the OEM may reject pilot-based compliance, while the wind customer may move to a faster supplier."
 
 D:
-  name: "Defensive cash-preservation strategy"
-  description: "Limit investment, seek deadline extensions, preserve liquidity, and avoid major retooling until uncertainty decreases."
-  core_tradeoff: "Reduces near-term financial exposure, but risks both OEM contract loss and missed wind-market timing."
+  name: "Liquidity defense and strategic pause"
+  description: "Freeze major transformation spending, preserve cash, seek deadline extensions, and avoid binding wind retooling commitments until financial and operational uncertainty decreases."
+  core_tradeoff: "Protects short-term liquidity and workforce stability, but risks OEM termination, loss of the wind opportunity, and strategic drift in both automotive AI quality and renewable-energy markets."
